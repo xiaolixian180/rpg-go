@@ -78,12 +78,12 @@ func toShopItemList(src []*model.ShopItem) []protocol.ShopItem {
 	result := make([]protocol.ShopItem, len(src))
 	for i, s := range src {
 		result[i] = protocol.ShopItem{
-			ID:            s.ID,
-			Name:          s.Name,
-			Price:         s.Price,
-			CurrencyType:  0, // model 中无此字段，默认金币
-			Stock:         s.Stock,
-			RequireLevel:  s.RequireLevel,
+			ID:           s.ID,
+			Name:         s.Name,
+			Price:        s.Price,
+			CurrencyType: s.CurrencyType,
+			Stock:        s.Stock,
+			RequireLevel: s.RequireLevel,
 		}
 	}
 	return result

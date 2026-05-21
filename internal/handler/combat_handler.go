@@ -4,119 +4,75 @@ import (
 	"context"
 	"encoding/json"
 
+	"hero-quest/internal/eventbus"
 	"hero-quest/internal/gateway"
 	"hero-quest/internal/model"
 	"hero-quest/internal/protocol"
 	"hero-quest/internal/service"
+	"hero-quest/internal/service/boss"
+	"hero-quest/internal/service/combat"
 	"hero-quest/pkg/errors"
+	"hero-quest/pkg/logger"
 )
 
 // CombatHandler 战斗模块消息处理器
-// 负责处理普通攻击、技能释放和资源采集的网络消息
 type CombatHandler struct {
-	combatSvc       service.CombatService  // 战斗服务接口
-	playerSvc       service.PlayerService  // 玩家服务接口（用于获取玩家数据）
-	resourceLookup  func(resourceID uint64) *model.Resource // 资源查找回调（由 GameManager 提供）
+	world     service.World        // 游戏世界（获取在线玩家和场景资源）
+	combatSvc combat.CombatService // 战斗服务接口
+	bossSvc   boss.BossService     // Boss服务（Boss死亡时处理掉落/通关/冷却）
+	bus       *eventbus.Bus        // 事件总线（发布Boss死亡事件）
 }
 
 // NewCombatHandler 创建战斗模块处理器实例
-func NewCombatHandler(combatSvc service.CombatService, playerSvc service.PlayerService, resourceLookup func(resourceID uint64) *model.Resource) *CombatHandler {
-	return &CombatHandler{combatSvc: combatSvc, playerSvc: playerSvc, resourceLookup: resourceLookup}
+func NewCombatHandler(world service.World, combatSvc combat.CombatService, bossSvc boss.BossService, bus *eventbus.Bus) *CombatHandler {
+	return &CombatHandler{world: world, combatSvc: combatSvc, bossSvc: bossSvc, bus: bus}
 }
 
 // HandleAttack 处理普通攻击请求
-// 流程：
-//  1. 从连接中获取玩家ID，反序列化请求体（目标ID+技能ID）
-//  2. 获取玩家数据，调用 CombatService.Attack 执行攻击逻辑
-//  3. 根据 service 返回的 GameError 设置响应的 Code 字段
-//  4. 通过 conn.Send 发送伤害结算结果
 func (h *CombatHandler) HandleAttack(conn *gateway.Conn, body []byte) {
-	// 反序列化攻击请求
-	var req protocol.C2SAttack
-	if err := json.Unmarshal(body, &req); err != nil {
-		// 反序列化失败，直接丢弃消息（攻击无独立错误响应）
-		return
-	}
+	handleReq(h.world, conn, body, func(ctx context.Context, player *model.Player, req protocol.C2SAttack) {
+		cr, ge := h.combatSvc.Attack(ctx, player, req.TargetID, req.SkillID)
+		if ge != nil {
+			return
+		}
 
-	// 获取玩家数据
-	player := getPlayer(conn, h.playerSvc)
-	if player == nil {
-		return
-	}
+		conn.Send(protocol.MsgIDDamage, &protocol.S2CDamage{
+			TargetID: cr.TargetID,
+			Damage:   cr.Damage,
+			CurrHp:   cr.CurrHp,
+			IsDead:   cr.IsDead,
+		})
 
-	// 调用战斗服务执行攻击逻辑
-	cr, ge := h.combatSvc.Attack(context.Background(), player, req.TargetID, req.SkillID)
-	if ge != nil {
-		// 攻击失败，记录日志（战斗场景下不发送错误码，仅不发送伤害反馈）
-		_ = ge
-		return
-	}
-
-	// 攻击成功，将 CombatResult 转换为协议层伤害结算消息并发送
-	conn.Send(protocol.MsgIDDamage, &protocol.S2CDamage{
-		TargetID: cr.TargetID,
-		Damage:   cr.Damage,
-		CurrHp:   cr.CurrHp,
-		IsDead:   cr.IsDead,
+		// Boss 死亡：处理掉落、通关进度、冷却、全服播报
+		if cr.IsDead && cr.IsBoss {
+			h.handleBossDie(conn, player, req.TargetID)
+		}
 	})
 }
 
 // HandleSkillCast 处理技能释放请求
-// 流程：
-//  1. 从连接中获取玩家ID，反序列化请求体（技能ID+目标ID+坐标）
-//  2. 获取玩家数据，调用 CombatService.SkillCast 执行技能释放逻辑
-//  3. 根据 service 返回的 GameError 设置响应的 Code 字段
-//  4. 通过 conn.Send 发送技能效果数据
 func (h *CombatHandler) HandleSkillCast(conn *gateway.Conn, body []byte) {
-	// 反序列化技能释放请求
-	var req protocol.C2SSkillCast
-	if err := json.Unmarshal(body, &req); err != nil {
-		// 反序列化失败，直接丢弃消息
-		return
-	}
-
-	// 获取玩家数据
-	player := getPlayer(conn, h.playerSvc)
-	if player == nil {
-		return
-	}
-
-	// 调用战斗服务执行技能释放逻辑
-	sr, ge := h.combatSvc.SkillCast(context.Background(), player, req.SkillID, req.TargetID, req.X, req.Y)
-	if ge != nil {
-		// 技能释放失败，不发送错误响应
-		_ = ge
-		return
-	}
-
-	// 技能释放成功，将 SkillResult 转换为协议层技能效果消息并发送
-	targets := make([]protocol.DamageInfo, len(sr.Targets))
-	for i, t := range sr.Targets {
-		targets[i] = protocol.DamageInfo{
-			TargetID: t.TargetID,
-			Damage:   t.Damage,
-			CurrHp:   t.CurrHp,
-			IsDead:   t.IsDead,
+	handleReq(h.world, conn, body, func(ctx context.Context, player *model.Player, req protocol.C2SSkillCast) {
+		sr, ge := h.combatSvc.SkillCast(ctx, player, req.SkillID, req.TargetID, req.X, req.Y)
+		if ge != nil {
+			return
 		}
-	}
-	conn.Send(protocol.MsgIDSkillEffect, &protocol.S2CSkillEffect{
-		CasterID: sr.CasterID,
-		SkillID:  sr.SkillID,
-		X:        sr.X,
-		Y:        sr.Y,
-		Targets:  targets,
+
+		targets := make([]protocol.DamageInfo, len(sr.Targets))
+		for i, t := range sr.Targets {
+			targets[i] = protocol.DamageInfo{
+				TargetID: t.TargetID, Damage: t.Damage, CurrHp: t.CurrHp, IsDead: t.IsDead,
+			}
+		}
+		conn.Send(protocol.MsgIDSkillEffect, &protocol.S2CSkillEffect{
+			CasterID: sr.CasterID, SkillID: sr.SkillID,
+			X: sr.X, Y: sr.Y, Targets: targets,
+		})
 	})
 }
 
 // HandleCollectResource 处理采集资源请求
-// 流程：
-//  1. 从连接中获取玩家ID，反序列化请求体（资源ID）
-//  2. 通过资源查找回调获取 *model.Resource 对象
-//  3. 调用 CombatService.CollectResource 执行采集逻辑
-//  4. 根据 service 返回的 GameError 设置响应的 Code 字段
-//  5. 通过 conn.Send 发送采集结果（获得的物品和数量）
 func (h *CombatHandler) HandleCollectResource(conn *gateway.Conn, body []byte) {
-	// 反序列化采集资源请求
 	var req protocol.C2SCollectResource
 	if err := json.Unmarshal(body, &req); err != nil {
 		conn.Send(protocol.MsgIDCollectResult, &protocol.S2CCollectResult{
@@ -125,14 +81,13 @@ func (h *CombatHandler) HandleCollectResource(conn *gateway.Conn, body []byte) {
 		return
 	}
 
-	// 获取玩家数据
-	player := getPlayer(conn, h.playerSvc)
+	player := onlinePlayer(h.world, conn)
 	if player == nil {
 		return
 	}
 
-	// 通过资源查找回调获取场景中的资源对象
-	resource := h.resourceLookup(req.ResourceID)
+	// 通过 World 获取场景中的资源
+	resource := h.lookupResource(player.Layer, req.ResourceID)
 	if resource == nil {
 		conn.Send(protocol.MsgIDCollectResult, &protocol.S2CCollectResult{
 			Code: errors.ErrResourceGone.Code,
@@ -140,14 +95,12 @@ func (h *CombatHandler) HandleCollectResource(conn *gateway.Conn, body []byte) {
 		return
 	}
 
-	// 调用战斗服务执行采集逻辑（传入 playerID 和 *model.Resource）
-	cr, ge := h.combatSvc.CollectResource(context.Background(), conn.PlayerID, resource)
+	cr, ge := h.combatSvc.CollectResource(connCtx(conn), conn.PlayerID, resource)
 	if ge != nil {
 		conn.Send(protocol.MsgIDCollectResult, &protocol.S2CCollectResult{Code: ge.Code})
 		return
 	}
 
-	// 采集成功，发送采集结果
 	conn.Send(protocol.MsgIDCollectResult, &protocol.S2CCollectResult{
 		Code:       errors.ErrSuccess.Code,
 		ResourceID: cr.ResourceID,
@@ -155,4 +108,56 @@ func (h *CombatHandler) HandleCollectResource(conn *gateway.Conn, body []byte) {
 		ItemName:   cr.ItemName,
 		Count:      cr.Count,
 	})
+}
+
+// handleBossDie 处理Boss死亡：掉落、通关进度、冷却、全服播报
+func (h *CombatHandler) handleBossDie(conn *gateway.Conn, player *model.Player, bossID uint64) {
+	b := h.world.GetBoss(bossID)
+	if b == nil {
+		return
+	}
+
+	dieResult, err := h.bossSvc.OnDie(connCtx(conn), player, b)
+	if err != nil {
+		logger.Error("Boss死亡处理失败", "boss_id", bossID, "err", err)
+	}
+	h.world.RemoveBoss(b.ID)
+
+	// 广播Boss死亡和掉落
+	if dieResult != nil {
+		drops := make([]protocol.DropItem, len(dieResult.Drops))
+		for i, d := range dieResult.Drops {
+			drops[i] = protocol.DropItem{
+				ItemID: d.ItemID, Name: d.Name,
+				Quality: d.Quality, Count: d.Count,
+			}
+		}
+		h.world.Hub().Broadcast(protocol.MsgIDBossDie, &protocol.S2CBossDie{
+			BossID: b.ID, Drops: drops,
+		})
+	}
+
+	// 发布Boss死亡事件，由事件总线分发给订阅者（播报、排行榜等）
+	player.Mu().RLock()
+	playerName := player.Name
+	playerID := player.ID
+	player.Mu().RUnlock()
+	h.bus.Publish(eventbus.TopicBossDie, &eventbus.BossDieEvent{
+		BossID:     b.ID,
+		BossName:   b.Name,
+		Layer:      b.Layer,
+		KillerID:   playerID,
+		KillerName: playerName,
+	})
+}
+
+// lookupResource 在指定层的资源表中查找资源
+func (h *CombatHandler) lookupResource(layer int32, resourceID uint64) *model.Resource {
+	dungeon := h.world.GetDungeon(layer)
+	if dungeon == nil {
+		return nil
+	}
+	dungeon.Mu().RLock()
+	defer dungeon.Mu().RUnlock()
+	return dungeon.Resources[resourceID]
 }

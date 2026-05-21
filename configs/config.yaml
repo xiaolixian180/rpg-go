@@ -12,7 +12,7 @@ database:
   host: "mysql"
   port: 3306
   user: "root"
-  password: "hero_quest_2026"
+  password: "HQ_DB_PASSWORD"     # use HQ_DATABASE_PASSWORD env var in production
   dbname: "hero_quest"
   max_idle: 10
   max_open: 100
@@ -20,8 +20,12 @@ database:
 redis:
   host: "redis"
   port: 6379
-  password: ""
+  password: "HQ_REDIS_PASSWORD"   # use HQ_REDIS_PASSWORD env var in production
   db: 0
+
+jwt:
+  secret: "HQ_JWT_SECRET"         # use HQ_JWT_SECRET env var in production; must be a long random string
+  expire_hours: 24
 
 game:
   max_level: 60
@@ -29,3 +33,13 @@ game:
   pvp_gold_penalty: 0.1
   pvp_honor_gain: 10
   red_name_threshold: 5
+  skill_reset_cost: 1000
+  teleport_cost: 100
+  skill_multiplier: 1.5
+  invincible_sec: 30
+  pet_levelup_cost: 100
+  bounty_gold_per_kill: 500
+  bounty_honor_gain: 10
+  boss_drop_purple: 0.1
+  boss_drop_orange: 0.02
+  page_size: 20

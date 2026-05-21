@@ -6,18 +6,36 @@ package scheduler
 import (
 	"time"
 
+	"hero-quest/internal/service/iface"
 	"hero-quest/pkg/logger"
 )
 
 // RegisterMonsterRefreshTask 注册怪物刷新定时任务。
-// 按照指定间隔检查并刷新地下城中的怪物，
-// 当前为占位实现，仅打印日志，后续对接怪物刷新逻辑。
-func RegisterMonsterRefreshTask(s *Scheduler) {
+// 每30秒遍历所有副本层，将已死亡的怪物按模板重置属性实现刷新。
+func RegisterMonsterRefreshTask(s *Scheduler, world iface.World) {
 	s.Add("monster_refresh", 30*time.Second, func() {
-		// TODO: 实现怪物刷新逻辑
-		// 1. 遍历所有活跃的地下城实例
-		// 2. 检查怪物刷新条件（时间/击杀数等）
-		// 3. 生成新怪物并通过 Hub 广播刷新通知
-		logger.Info("[monster_refresh] 怪物刷新检查执行中（占位实现）")
+		// 遍历所有副本层，刷新已死亡的怪物
+		for i := int32(1); i <= world.MaxLayer(); i++ {
+			d := world.GetDungeon(i)
+			if d == nil {
+				continue
+			}
+			d.Mu().Lock()
+			respawnCount := 0
+			for _, m := range d.Monsters {
+				m.Mu().Lock()
+				if m.Dead {
+					// 使用怪物自身的 MaxHp 恢复，避免模板查找错误
+					m.Hp = m.MaxHp
+					m.Dead = false
+					respawnCount++
+				}
+				m.Mu().Unlock()
+			}
+			d.Mu().Unlock()
+			if respawnCount > 0 {
+				logger.Debug("怪物已刷新", "layer", i, "count", respawnCount)
+			}
+		}
 	})
 }

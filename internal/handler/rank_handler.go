@@ -1,23 +1,22 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 
 	"hero-quest/internal/gateway"
 	"hero-quest/internal/protocol"
-	"hero-quest/internal/service"
+	"hero-quest/internal/service/rank"
 	"hero-quest/pkg/errors"
 )
 
 // RankHandler 排行榜模块消息处理器
 // 负责处理排行榜查询的网络消息
 type RankHandler struct {
-	rankSvc service.RankService // 排行榜服务接口
+	rankSvc rank.RankService // 排行榜服务接口
 }
 
 // NewRankHandler 创建排行榜模块处理器实例
-func NewRankHandler(rankSvc service.RankService) *RankHandler {
+func NewRankHandler(rankSvc rank.RankService) *RankHandler {
 	return &RankHandler{rankSvc: rankSvc}
 }
 
@@ -38,7 +37,7 @@ func (h *RankHandler) HandleRankingList(conn *gateway.Conn, body []byte) {
 	}
 
 	// 调用排行榜服务查询排行数据
-	items, ge := h.rankSvc.GetRanking(context.Background(), req.Type)
+	items, ge := h.rankSvc.GetRanking(connCtx(conn), req.Type)
 	if ge != nil {
 		conn.Send(protocol.MsgIDRankingListResp, &protocol.S2CRankingListResp{Code: ge.Code})
 		return

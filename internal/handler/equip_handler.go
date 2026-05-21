@@ -1,24 +1,25 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 
 	"hero-quest/internal/gateway"
 	"hero-quest/internal/protocol"
 	"hero-quest/internal/service"
+	"hero-quest/internal/service/equip"
 	"hero-quest/pkg/errors"
 )
 
 // EquipHandler 装备模块消息处理器
 // 负责处理装备强化、附魔、穿戴、卸下和锻造合成的网络消息
 type EquipHandler struct {
-	equipSvc service.EquipService // 装备服务接口
+	world    service.World      // 游戏世界（获取在线玩家）
+	equipSvc equip.EquipService // 装备服务接口
 }
 
 // NewEquipHandler 创建装备模块处理器实例
-func NewEquipHandler(equipSvc service.EquipService) *EquipHandler {
-	return &EquipHandler{equipSvc: equipSvc}
+func NewEquipHandler(world service.World, equipSvc equip.EquipService) *EquipHandler {
+	return &EquipHandler{world: world, equipSvc: equipSvc}
 }
 
 // HandleStrengthen 处理装备强化请求
@@ -37,8 +38,15 @@ func (h *EquipHandler) HandleStrengthen(conn *gateway.Conn, body []byte) {
 		return
 	}
 
+	// 获取在线玩家实例
+	p := h.world.GetOnlinePlayer(conn.PlayerID)
+	if p == nil {
+		conn.Send(protocol.MsgIDEquipStrengthenResp, &protocol.S2CEquipStrengthenResp{Code: errors.ErrNotLogin.Code})
+		return
+	}
+
 	// 调用装备服务执行强化逻辑
-	sr, ge := h.equipSvc.Strengthen(context.Background(), conn.PlayerID, req.Slot)
+	sr, ge := h.equipSvc.Strengthen(connCtx(conn), p, req.Slot)
 	if ge != nil {
 		conn.Send(protocol.MsgIDEquipStrengthenResp, &protocol.S2CEquipStrengthenResp{Code: ge.Code})
 		return
@@ -46,10 +54,10 @@ func (h *EquipHandler) HandleStrengthen(conn *gateway.Conn, body []byte) {
 
 	// 强化完成，发送强化结果
 	conn.Send(protocol.MsgIDEquipStrengthenResp, &protocol.S2CEquipStrengthenResp{
-		Code:     errors.ErrSuccess.Code,
-		Slot:     sr.Slot,
-		NewLevel: sr.NewLevel,
-		CostGold: sr.CostGold,
+		Code:      errors.ErrSuccess.Code,
+		Slot:      sr.Slot,
+		NewLevel:  sr.NewLevel,
+		CostGold:  sr.CostGold,
 		IsSuccess: sr.IsSuccess,
 	})
 }
@@ -71,7 +79,7 @@ func (h *EquipHandler) HandleEnchant(conn *gateway.Conn, body []byte) {
 	}
 
 	// 调用装备服务执行附魔逻辑
-	er, ge := h.equipSvc.Enchant(context.Background(), conn.PlayerID, req.Slot, req.MaterialID)
+	er, ge := h.equipSvc.Enchant(connCtx(conn), conn.PlayerID, req.Slot, req.MaterialID)
 	if ge != nil {
 		conn.Send(protocol.MsgIDEquipEnchantResp, &protocol.S2CEquipEnchantResp{Code: ge.Code})
 		return
@@ -102,8 +110,15 @@ func (h *EquipHandler) HandleWear(conn *gateway.Conn, body []byte) {
 		return
 	}
 
+	// 获取在线玩家实例
+	p := h.world.GetOnlinePlayer(conn.PlayerID)
+	if p == nil {
+		conn.Send(protocol.MsgIDEquipWearResp, &protocol.S2CEquipWearResp{Code: errors.ErrNotLogin.Code})
+		return
+	}
+
 	// 调用装备服务执行穿戴逻辑
-	ge := h.equipSvc.Wear(context.Background(), conn.PlayerID, req.Slot, req.EquipID)
+	ge := h.equipSvc.Wear(connCtx(conn), p, req.Slot, req.EquipID)
 	if ge != nil {
 		conn.Send(protocol.MsgIDEquipWearResp, &protocol.S2CEquipWearResp{Code: ge.Code})
 		return
@@ -133,7 +148,7 @@ func (h *EquipHandler) HandleUnload(conn *gateway.Conn, body []byte) {
 	}
 
 	// 调用装备服务执行卸下逻辑
-	ge := h.equipSvc.Unload(context.Background(), conn.PlayerID, req.Slot)
+	ge := h.equipSvc.Unload(connCtx(conn), conn.PlayerID, req.Slot)
 	if ge != nil {
 		conn.Send(protocol.MsgIDEquipUnloadResp, &protocol.S2CEquipUnloadResp{Code: ge.Code})
 		return
@@ -156,22 +171,29 @@ func (h *EquipHandler) HandleForge(conn *gateway.Conn, body []byte) {
 	// 反序列化锻造合成请求
 	var req protocol.C2SForge
 	if err := json.Unmarshal(body, &req); err != nil {
-		conn.Send(protocol.MsgIDForgeResp, &protocol.S2SForgeResp{
+		conn.Send(protocol.MsgIDForgeResp, &protocol.S2CForgeResp{
 			Code: errors.ErrParamInvalid.Code,
 		})
 		return
 	}
 
+	// 获取在线玩家实例
+	p := h.world.GetOnlinePlayer(conn.PlayerID)
+	if p == nil {
+		conn.Send(protocol.MsgIDForgeResp, &protocol.S2CForgeResp{Code: errors.ErrNotLogin.Code})
+		return
+	}
+
 	// 调用装备服务执行锻造逻辑
-	fr, ge := h.equipSvc.Forge(context.Background(), conn.PlayerID, req.RecipeID, req.Materials)
+	fr, ge := h.equipSvc.Forge(connCtx(conn), p, req.RecipeID, req.Materials)
 	if ge != nil {
-		conn.Send(protocol.MsgIDForgeResp, &protocol.S2SForgeResp{Code: ge.Code})
+		conn.Send(protocol.MsgIDForgeResp, &protocol.S2CForgeResp{Code: ge.Code})
 		return
 	}
 
 	// 锻造成功，发送锻造结果
-	conn.Send(protocol.MsgIDForgeResp, &protocol.S2SForgeResp{
-		Code:      errors.ErrSuccess.Code,
+	conn.Send(protocol.MsgIDForgeResp, &protocol.S2CForgeResp{
+		Code:       errors.ErrSuccess.Code,
 		ResultID:   fr.ResultID,
 		ResultName: fr.ResultName,
 		Quality:    fr.Quality,

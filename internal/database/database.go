@@ -84,6 +84,7 @@ func (db *DB) InitSchema() error {
 		&model.PlayerPetORM{},
 		&model.DungeonProgressORM{},
 		&model.TradeOrderORM{},
+		&model.PlayerInventoryORM{},
 	)
 	if err != nil {
 		return fmt.Errorf("auto migrate: %w", err)

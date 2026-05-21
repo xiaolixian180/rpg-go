@@ -4,6 +4,7 @@
 package rbac
 
 import (
+	"database/sql"
 	"fmt"
 
 	"hero-quest/pkg/logger"
@@ -18,6 +19,7 @@ import (
 // Enforcer Casbin 权限执行器，封装策略加载和权限校验
 type Enforcer struct {
 	enforcer *casbin.Enforcer
+	db       *sql.DB // 底层数据库连接，用于关闭时释放资源
 }
 
 // casbinModel Casbin RBAC 模型定义（嵌入代码中，无需外部配置文件）
@@ -96,7 +98,14 @@ func New(cfg Config) (*Enforcer, error) {
 	}
 
 	logger.Info("Casbin 权限执行器初始化成功")
-	return &Enforcer{enforcer: e}, nil
+
+	// 保留底层数据库连接引用，用于 Close 时释放
+	var sqlDB *sql.DB
+	if sqlDBInner, err := gormDB.DB(); err == nil {
+		sqlDB = sqlDBInner
+	}
+
+	return &Enforcer{enforcer: e, db: sqlDB}, nil
 }
 
 // Check 检查玩家是否有指定权限
@@ -151,4 +160,15 @@ func (e *Enforcer) HasRole(playerID string, role string) bool {
 		return false
 	}
 	return ok
+}
+
+// Close 关闭 Casbin 执行器及其底层数据库连接，释放资源
+func (e *Enforcer) Close() {
+	if e.db != nil {
+		if err := e.db.Close(); err != nil {
+			logger.Error("关闭 Casbin 数据库连接失败", "err", err)
+		} else {
+			logger.Info("Casbin 数据库连接已关闭")
+		}
+	}
 }

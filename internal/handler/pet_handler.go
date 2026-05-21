@@ -1,23 +1,22 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 
 	"hero-quest/internal/gateway"
 	"hero-quest/internal/protocol"
-	"hero-quest/internal/service"
+	"hero-quest/internal/service/pet"
 	"hero-quest/pkg/errors"
 )
 
 // PetHandler 宠物模块消息处理器
 // 负责处理宠物召唤、收回、升级、进阶、探险和合成的网络消息
 type PetHandler struct {
-	petSvc service.PetService // 宠物服务接口
+	petSvc pet.PetService // 宠物服务接口
 }
 
 // NewPetHandler 创建宠物模块处理器实例
-func NewPetHandler(petSvc service.PetService) *PetHandler {
+func NewPetHandler(petSvc pet.PetService) *PetHandler {
 	return &PetHandler{petSvc: petSvc}
 }
 
@@ -38,7 +37,7 @@ func (h *PetHandler) HandleSummon(conn *gateway.Conn, body []byte) {
 	}
 
 	// 调用宠物服务执行召唤逻辑
-	pet, ge := h.petSvc.Summon(context.Background(), conn.PlayerID, req.PetUID)
+	pet, ge := h.petSvc.Summon(connCtx(conn), conn.PlayerID, req.PetUID)
 	if ge != nil {
 		conn.Send(protocol.MsgIDPetSummonResp, &protocol.S2CPetSummonResp{Code: ge.Code})
 		return
@@ -60,19 +59,27 @@ func (h *PetHandler) HandleRecall(conn *gateway.Conn, body []byte) {
 	// 反序列化宠物收回请求
 	var req protocol.C2SPetRecall
 	if err := json.Unmarshal(body, &req); err != nil {
-		// 反序列化失败，记录日志
+		conn.Send(protocol.MsgIDPetRecallResp, &protocol.S2CPetRecallResp{
+			Code: errors.ErrParamInvalid.Code,
+		})
 		return
 	}
 
 	// 调用宠物服务执行收回逻辑
-	ge := h.petSvc.Recall(context.Background(), conn.PlayerID, req.PetUID)
+	ge := h.petSvc.Recall(connCtx(conn), conn.PlayerID, req.PetUID)
 	if ge != nil {
-		// 收回失败，不发送错误响应
-		_ = ge
+		conn.Send(protocol.MsgIDPetRecallResp, &protocol.S2CPetRecallResp{
+			Code:   ge.Code,
+			PetUID: req.PetUID,
+		})
 		return
 	}
 
-	// 收回成功（协议中无 PetRecall 响应结构体和消息ID，此处静默处理）
+	// 收回成功
+	conn.Send(protocol.MsgIDPetRecallResp, &protocol.S2CPetRecallResp{
+		Code:   errors.ErrSuccess.Code,
+		PetUID: req.PetUID,
+	})
 }
 
 // HandleLevelUp 处理宠物升级请求
@@ -92,7 +99,7 @@ func (h *PetHandler) HandleLevelUp(conn *gateway.Conn, body []byte) {
 	}
 
 	// 调用宠物服务执行升级逻辑（goldCost=100，升级费用由调用方决定）
-	lr, ge := h.petSvc.LevelUp(context.Background(), conn.PlayerID, req.PetUID, 100)
+	lr, ge := h.petSvc.LevelUp(connCtx(conn), conn.PlayerID, req.PetUID, 100)
 	if ge != nil {
 		conn.Send(protocol.MsgIDPetLevelUp, &protocol.S2CPetLevelUp{Code: ge.Code})
 		return
@@ -123,7 +130,7 @@ func (h *PetHandler) HandleEvolve(conn *gateway.Conn, body []byte) {
 	}
 
 	// 调用宠物服务执行进阶逻辑
-	er, ge := h.petSvc.Evolve(context.Background(), conn.PlayerID, req.PetUID)
+	er, ge := h.petSvc.Evolve(connCtx(conn), conn.PlayerID, req.PetUID)
 	if ge != nil {
 		conn.Send(protocol.MsgIDPetEvolveResp, &protocol.S2CPetEvolveResp{Code: ge.Code})
 		return
@@ -155,7 +162,7 @@ func (h *PetHandler) HandleExplore(conn *gateway.Conn, body []byte) {
 	}
 
 	// 调用宠物服务执行探险派遣逻辑
-	er, ge := h.petSvc.Explore(context.Background(), conn.PlayerID, req.PetUID, req.Duration)
+	er, ge := h.petSvc.Explore(connCtx(conn), conn.PlayerID, req.PetUID, req.Duration)
 	if ge != nil {
 		conn.Send(protocol.MsgIDPetExploreResp, &protocol.S2CPetExploreResp{Code: ge.Code})
 		return
@@ -186,7 +193,7 @@ func (h *PetHandler) HandleCompose(conn *gateway.Conn, body []byte) {
 	}
 
 	// 调用宠物服务执行合成逻辑
-	cr, ge := h.petSvc.Compose(context.Background(), conn.PlayerID, req.PetUIDs)
+	cr, ge := h.petSvc.Compose(connCtx(conn), conn.PlayerID, req.PetUIDs)
 	if ge != nil {
 		conn.Send(protocol.MsgIDPetComposeResp, &protocol.S2CPetComposeResp{Code: ge.Code})
 		return

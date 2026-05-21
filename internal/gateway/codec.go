@@ -27,11 +27,11 @@ func decodeMessage(data []byte) (uint16, []byte, error) {
 	length := binary.BigEndian.Uint16(data[0:2])
 	msgID := binary.BigEndian.Uint16(data[2:4])
 	body := data[4:]
-	if int(length) > len(body) {
+	// length = 2(msgID) + bodyLen，需要扣除 msgID 的 2 字节得到实际 body 长度
+	bodyLen := int(length) - 2
+	if bodyLen < 0 || bodyLen > len(body) {
 		return 0, nil, io.ErrUnexpectedEOF
 	}
-	if int(length) < len(body) {
-		body = body[:length]
-	}
+	body = body[:bodyLen]
 	return msgID, body, nil
 }

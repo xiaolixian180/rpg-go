@@ -8,7 +8,6 @@ import (
 	"hero-quest/internal/model"
 
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 // ==================== 装备数据访问实现 ====================
@@ -24,8 +23,6 @@ func NewEquipRepo(db *database.DB) EquipRepo {
 }
 
 // GetEquipBySlot 查询玩家指定槽位的装备。
-// 利用 uk_player_slot 唯一索引保证查询效率。
-// 若该槽位无装备，返回 nil 和 nil error。
 func (r *equipRepo) GetEquipBySlot(ctx context.Context, playerID uint64, slot int32) (*model.Equipment, error) {
 	var e model.PlayerEquipORM
 	err := r.db.WithContext(ctx).
@@ -37,7 +34,6 @@ func (r *equipRepo) GetEquipBySlot(ctx context.Context, playerID uint64, slot in
 		}
 		return nil, fmt.Errorf("query equip player=%d slot=%d: %w", playerID, slot, err)
 	}
-	// 将 ORM 模型转换为运行时模型
 	return &model.Equipment{
 		ID:              e.ID,
 		PlayerID:        e.PlayerID,
@@ -45,12 +41,35 @@ func (r *equipRepo) GetEquipBySlot(ctx context.Context, playerID uint64, slot in
 		EquipID:         e.EquipID,
 		StrengthenLevel: e.StrengthenLevel,
 		EnchantAttr:     e.EnchantAttr,
+		Quality:         e.Quality,
 	}, nil
 }
 
+// GetAllEquips 查询玩家所有装备
+func (r *equipRepo) GetAllEquips(ctx context.Context, playerID uint64) ([]*model.Equipment, error) {
+	var rows []model.PlayerEquipORM
+	err := r.db.WithContext(ctx).
+		Where("player_id = ?", playerID).
+		Find(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("query all equips player=%d: %w", playerID, err)
+	}
+	equips := make([]*model.Equipment, 0, len(rows))
+	for _, e := range rows {
+		equips = append(equips, &model.Equipment{
+			ID:              e.ID,
+			PlayerID:        e.PlayerID,
+			Slot:            e.Slot,
+			EquipID:         e.EquipID,
+			StrengthenLevel: e.StrengthenLevel,
+			EnchantAttr:     e.EnchantAttr,
+			Quality:         e.Quality,
+		})
+	}
+	return equips, nil
+}
+
 // SaveEquip 保存装备数据（新增或更新）。
-// 使用 GORM Clauses(clause.OnConflict{...}) 实现 INSERT ... ON DUPLICATE KEY UPDATE，
-// 依赖 uk_player_slot 唯一索引实现幂等写入。
 func (r *equipRepo) SaveEquip(ctx context.Context, equip *model.Equipment) error {
 	e := model.PlayerEquipORM{
 		PlayerID:        equip.PlayerID,
@@ -58,31 +77,26 @@ func (r *equipRepo) SaveEquip(ctx context.Context, equip *model.Equipment) error
 		EquipID:         equip.EquipID,
 		StrengthenLevel: equip.StrengthenLevel,
 		EnchantAttr:     equip.EnchantAttr,
+		Quality:         equip.Quality,
 	}
-	// 若有自增ID，设置到ORM模型
 	if equip.ID > 0 {
 		e.ID = equip.ID
 	}
 
 	err := r.db.WithContext(ctx).
-		Clauses(clause.OnConflict{
-			Columns: []clause.Column{{Name: "player_id"}, {Name: "slot"}},
-			DoUpdates: clause.AssignmentColumns([]string{
-				"equip_id", "strengthen_level", "enchant_attr",
-			}),
-		}).
+		Clauses(gormClauseOnConflict(
+			[]string{"player_id", "slot"},
+			[]string{"equip_id", "strengthen_level", "enchant_attr", "quality"},
+		)).
 		Create(&e).Error
 	if err != nil {
 		return fmt.Errorf("save equip player=%d slot=%d: %w", equip.PlayerID, equip.Slot, err)
 	}
-
-	// 回写自增主键
 	equip.ID = e.ID
 	return nil
 }
 
 // DeleteEquip 删除玩家指定槽位的装备记录。
-// 根据 player_id + slot 条件删除，确保只删除该玩家该槽位的装备。
 func (r *equipRepo) DeleteEquip(ctx context.Context, playerID uint64, slot int32) error {
 	err := r.db.WithContext(ctx).
 		Where("player_id = ? AND slot = ?", playerID, slot).
@@ -93,18 +107,23 @@ func (r *equipRepo) DeleteEquip(ctx context.Context, playerID uint64, slot int32
 	return nil
 }
 
-// GetEquipTemplates 批量查询装备模板。
-// 根据模板 ID 列表从内存中查找（EquipTemplate 为配置数据，通常在内存中维护）。
-// 当前返回空 map 占位，待接入配置表后补充实现。
+// GetEquipTemplates 批量查询装备模板，从静态数据表加载。
 func (r *equipRepo) GetEquipTemplates(ctx context.Context, ids []int32) (map[int32]*model.EquipTemplate, error) {
-	// 装备模板属于静态配置数据，通常从配置文件或内存缓存加载，
-	// 此处预留接口，待配置系统接入后实现
-	return make(map[int32]*model.EquipTemplate), nil
+	result := make(map[int32]*model.EquipTemplate, len(ids))
+	for _, id := range ids {
+		if t, ok := model.EquipTemplates[id]; ok {
+			result[id] = t
+		}
+	}
+	return result, nil
 }
 
-// GetForgeRecipe 查询锻造配方。
-// 当前返回 nil 占位，待接入配置表后补充实现。
+// GetForgeRecipe 查询锻造配方，从静态数据表加载。
 func (r *equipRepo) GetForgeRecipe(ctx context.Context, recipeID uint64) (*model.ForgeRecipe, error) {
-	// 锻造配方属于静态配置数据，待配置系统接入后实现
+	for _, r := range model.StaticForgeRecipes {
+		if r.ID == recipeID {
+			return r, nil
+		}
+	}
 	return nil, nil
 }

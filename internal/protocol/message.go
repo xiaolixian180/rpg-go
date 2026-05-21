@@ -54,11 +54,11 @@ type C2SEnterDungeon struct {
 
 // S2CEnterDungeonResp 服务端返回地下城场景数据
 type S2CEnterDungeonResp struct {
-	Code      uint32        `json:"code"`      // 0=成功 1=未登录 2=层数不合法
-	Layer     int32         `json:"layer"`     // 当前层数
-	Zone      string        `json:"zone"`      // 区域名称（翠绿森林/腐蚀沼泽/烈焰火山）
-	Monsters  []MonsterData `json:"monsters"`  // 场景内怪物列表
-	Players   []PlayerBrief `json:"players"`   // 场景内其他玩家列表
+	Code      uint32         `json:"code"`      // 0=成功 1=未登录 2=层数不合法
+	Layer     int32          `json:"layer"`     // 当前层数
+	Zone      string         `json:"zone"`      // 区域名称（翠绿森林/腐蚀沼泽/烈焰火山）
+	Monsters  []MonsterData  `json:"monsters"`  // 场景内怪物列表
+	Players   []PlayerBrief  `json:"players"`   // 场景内其他玩家列表
 	Resources []ResourceData `json:"resources"` // 场景内可采集资源列表
 }
 
@@ -76,8 +76,8 @@ type S2CDungeonInfo struct {
 	MaxLayer     int32 `json:"max_layer"`     // 最高通关层数
 }
 
-// S2SMonsterRefresh 服务端推送怪物刷新通知
-type S2SMonsterRefresh struct {
+// S2CMonsterRefresh 服务端推送怪物刷新通知
+type S2CMonsterRefresh struct {
 	Monsters []MonsterData `json:"monsters"` // 新刷新的怪物列表
 }
 
@@ -85,6 +85,9 @@ type S2SMonsterRefresh struct {
 type C2SLayerTeleport struct {
 	TargetLayer int32 `json:"target_layer"` // 目标层数
 }
+
+// S2CLayerTeleportResp 服务端层间传送响应，复用地下城场景数据格式
+type S2CLayerTeleportResp = S2CEnterDungeonResp
 
 // ==================== 场景实体 ====================
 
@@ -100,15 +103,15 @@ type MonsterData struct {
 
 // PlayerBrief 场景内其他玩家简要信息
 type PlayerBrief struct {
-	ID     uint64  `json:"id"`     // 玩家ID
-	Name   string  `json:"name"`   // 玩家名称
-	Class  int32   `json:"class"`  // 职业
-	Level  int32   `json:"level"`  // 等级
-	Hp     int64   `json:"hp"`     // 当前血量
-	MaxHp  int64   `json:"max_hp"` // 最大血量
-	X      float64 `json:"x"`      // X坐标
-	Y      float64 `json:"y"`      // Y坐标
-	PetID  int32   `json:"pet_id"` // 当前出战宠物ID
+	ID    uint64  `json:"id"`     // 玩家ID
+	Name  string  `json:"name"`   // 玩家名称
+	Class int32   `json:"class"`  // 职业
+	Level int32   `json:"level"`  // 等级
+	Hp    int64   `json:"hp"`     // 当前血量
+	MaxHp int64   `json:"max_hp"` // 最大血量
+	X     float64 `json:"x"`      // X坐标
+	Y     float64 `json:"y"`      // Y坐标
+	PetID int32   `json:"pet_id"` // 当前出战宠物ID
 }
 
 // ResourceData 可采集资源数据
@@ -194,14 +197,14 @@ type S2CCollectResult struct {
 
 // S2CBossSpawn 服务端Boss生成通知
 type S2CBossSpawn struct {
-	BossID uint64         `json:"boss_id"` // Boss唯一ID
-	Name   string         `json:"name"`    // Boss名称
-	Hp     int64          `json:"hp"`      // 当前血量
-	MaxHp  int64          `json:"max_hp"`  // 最大血量
-	Layer  int32          `json:"layer"`   // 所在层数
-	X      float64        `json:"x"`       // X坐标
-	Y      float64        `json:"y"`       // Y坐标
-	Skills []BossSkillData `json:"skills"` // Boss技能列表
+	BossID uint64          `json:"boss_id"` // Boss唯一ID
+	Name   string          `json:"name"`    // Boss名称
+	Hp     int64           `json:"hp"`      // 当前血量
+	MaxHp  int64           `json:"max_hp"`  // 最大血量
+	Layer  int32           `json:"layer"`   // 所在层数
+	X      float64         `json:"x"`       // X坐标
+	Y      float64         `json:"y"`       // Y坐标
+	Skills []BossSkillData `json:"skills"`  // Boss技能列表
 }
 
 // BossSkillData Boss技能数据
@@ -220,10 +223,10 @@ type S2CBossDie struct {
 
 // DropItem 掉落物品数据
 type DropItem struct {
-	ItemID  uint64 `json:"item_id"`  // 物品ID
-	Name    string `json:"name"`     // 物品名称
-	Quality int32  `json:"quality"`  // 品质：0=白 1=绿 2=蓝 3=紫 4=橙 5=红
-	Count   int32  `json:"count"`    // 物品数量
+	ItemID  uint64 `json:"item_id"` // 物品ID
+	Name    string `json:"name"`    // 物品名称
+	Quality int32  `json:"quality"` // 品质：0=白 1=绿 2=蓝 3=紫 4=橙 5=红
+	Count   int32  `json:"count"`   // 物品数量
 }
 
 // ==================== 装备 ====================
@@ -250,15 +253,15 @@ type C2SEquipEnchant struct {
 
 // S2CEquipEnchantResp 服务端装备附魔结果
 type S2CEquipEnchantResp struct {
-	Code     uint32 `json:"code"`     // 0=成功 1=材料不足
-	Slot     int32  `json:"slot"`     // 槽位
+	Code     uint32 `json:"code"`      // 0=成功 1=材料不足
+	Slot     int32  `json:"slot"`      // 槽位
 	AttrName string `json:"attr_name"` // 附魔属性名（力量/敏捷/智力/体质）
 	AttrVal  int32  `json:"attr_val"`  // 附魔属性值
 }
 
 // C2SEquipWear 客户端穿戴装备请求
 type C2SEquipWear struct {
-	Slot    int32  `json:"slot"`    // 目标槽位
+	Slot    int32  `json:"slot"`     // 目标槽位
 	EquipID uint64 `json:"equip_id"` // 装备ID
 }
 
@@ -281,12 +284,12 @@ type S2CEquipUnloadResp struct {
 
 // C2SForge 客户端锻造合成请求
 type C2SForge struct {
-	RecipeID  uint64   `json:"recipe_id"`  // 锻造图纸ID
-	Materials []uint64 `json:"materials"`  // 消耗的材料ID列表
+	RecipeID  uint64   `json:"recipe_id"` // 锻造图纸ID
+	Materials []uint64 `json:"materials"` // 消耗的材料ID列表
 }
 
-// S2SForgeResp 服务端锻造合成结果
-type S2SForgeResp struct {
+// S2CForgeResp 服务端锻造合成结果
+type S2CForgeResp struct {
 	Code       uint32 `json:"code"`        // 0=成功 1=材料不足 2=图纸不存在
 	ResultID   uint64 `json:"result_id"`   // 产出装备ID
 	ResultName string `json:"result_name"` // 产出装备名称
@@ -303,6 +306,7 @@ type C2SPvpAttack struct {
 
 // S2CPvpResult 服务端PvP结算结果
 type S2CPvpResult struct {
+	Code       uint32 `json:"code"`        // 错误码，0表示成功
 	AttackerID uint64 `json:"attacker_id"` // 攻击者ID
 	TargetID   uint64 `json:"target_id"`   // 目标ID
 	Damage     int64  `json:"damage"`      // 伤害值
@@ -331,6 +335,7 @@ type C2SBountyHunt struct {
 
 // S2CBountyReward 服务端悬赏奖励
 type S2CBountyReward struct {
+	Code      uint32 `json:"code"`       // 错误码，0表示成功
 	TargetID  uint64 `json:"target_id"`  // 目标ID
 	GoldGain  int64  `json:"gold_gain"`  // 获得金币
 	HonorGain int32  `json:"honor_gain"` // 获得荣誉
@@ -343,7 +348,7 @@ type C2SRevenge struct {
 
 // S2CRevengeResp 服务端复仇响应
 type S2CRevengeResp struct {
-	Code     uint32 `json:"code"`     // 0=成功 1=不是仇人 2=参数错误
+	Code     uint32 `json:"code"`      // 0=成功 1=不是仇人 2=参数错误
 	TargetID uint64 `json:"target_id"` // 仇人ID
 }
 
@@ -380,6 +385,12 @@ type C2SPetRecall struct {
 	PetUID uint64 `json:"pet_uid"` // 宠物唯一实例ID
 }
 
+// S2CPetRecallResp 服务端收回宠物结果
+type S2CPetRecallResp struct {
+	Code   uint32 `json:"code"`    // 0=成功 1=宠物不存在
+	PetUID uint64 `json:"pet_uid"` // 宠物ID
+}
+
 // C2SPetLevelUp 客户端宠物升级请求
 type C2SPetLevelUp struct {
 	PetUID uint64 `json:"pet_uid"` // 宠物唯一实例ID
@@ -387,9 +398,9 @@ type C2SPetLevelUp struct {
 
 // S2CPetLevelUp 服务端宠物升级结果
 type S2CPetLevelUp struct {
-	Code   uint32 `json:"code"`   // 0=成功
+	Code   uint32 `json:"code"`    // 0=成功
 	PetUID uint64 `json:"pet_uid"` // 宠物ID
-	Level  int32  `json:"level"`  // 新等级
+	Level  int32  `json:"level"`   // 新等级
 }
 
 // C2SPetEvolve 客户端宠物进阶请求（需等级≥10）
@@ -407,8 +418,8 @@ type S2CPetEvolveResp struct {
 
 // C2SPetExplore 客户端宠物探险派遣请求
 type C2SPetExplore struct {
-	PetUID   uint64 `json:"pet_uid"`   // 宠物ID
-	Duration int32  `json:"duration"`  // 探险时长（分钟，上限12小时）
+	PetUID   uint64 `json:"pet_uid"`  // 宠物ID
+	Duration int32  `json:"duration"` // 探险时长（分钟，上限12小时）
 }
 
 // S2CPetExploreResp 服务端宠物探险派遣结果
@@ -420,8 +431,8 @@ type S2CPetExploreResp struct {
 
 // S2CPetExploreDone 服务端推送探险完成奖励
 type S2CPetExploreDone struct {
-	PetUID  uint64     `json:"pet_uid"`  // 宠物ID
-	Rewards []DropItem `json:"rewards"`  // 探险奖励列表
+	PetUID  uint64     `json:"pet_uid"` // 宠物ID
+	Rewards []DropItem `json:"rewards"` // 探险奖励列表
 }
 
 // C2SPetCompose 客户端宠物合成请求（3只同品质合成升阶）
@@ -465,14 +476,14 @@ type S2CTradeListResp struct {
 
 // TradeItem 交易行商品数据
 type TradeItem struct {
-	OrderID        uint64 `json:"order_id"`         // 订单ID
-	SellerID       uint64 `json:"seller_id"`        // 卖家ID
-	SellerName     string `json:"seller_name"`      // 卖家名称
-	EquipID        int32  `json:"equip_id"`         // 装备模板ID
-	Name           string `json:"name"`             // 装备名称
-	Quality        int32  `json:"quality"`          // 品质
-	StrengthenLevel int32 `json:"strengthen_level"` // 强化等级
-	Price          int64  `json:"price"`            // 售价（金币）
+	OrderID         uint64 `json:"order_id"`         // 订单ID
+	SellerID        uint64 `json:"seller_id"`        // 卖家ID
+	SellerName      string `json:"seller_name"`      // 卖家名称
+	EquipID         int32  `json:"equip_id"`         // 装备模板ID
+	Name            string `json:"name"`             // 装备名称
+	Quality         int32  `json:"quality"`          // 品质
+	StrengthenLevel int32  `json:"strengthen_level"` // 强化等级
+	Price           int64  `json:"price"`            // 售价（金币）
 }
 
 // C2STradePublish 客户端上架商品请求
@@ -483,7 +494,7 @@ type C2STradePublish struct {
 
 // S2CTradePublishResp 服务端上架结果
 type S2CTradePublishResp struct {
-	Code    uint32 `json:"code"`    // 0=成功 1=装备已绑定
+	Code    uint32 `json:"code"`     // 0=成功 1=装备已绑定
 	OrderID uint64 `json:"order_id"` // 订单ID
 }
 
@@ -494,7 +505,7 @@ type C2STradeBuy struct {
 
 // S2CTradeBuyResp 服务端购买结果
 type S2CTradeBuyResp struct {
-	Code    uint32 `json:"code"`    // 0=成功 1=金币不足 2=已售出
+	Code    uint32 `json:"code"`     // 0=成功 1=金币不足 2=已售出
 	OrderID uint64 `json:"order_id"` // 订单ID
 }
 
@@ -516,8 +527,8 @@ type C2SShopList struct {
 	Type int32 `json:"type"` // 商店类型：0=普通 1=荣誉 2=公会
 }
 
-// S2SShopListResp 服务端商店列表
-type S2SShopListResp struct {
+// S2CShopListResp 服务端商店列表
+type S2CShopListResp struct {
 	Code  uint32     `json:"code"`  // 0=成功
 	Items []ShopItem `json:"items"` // 商品列表
 }
@@ -534,13 +545,14 @@ type ShopItem struct {
 
 // C2SShopBuy 客户端购买商店商品
 type C2SShopBuy struct {
-	ItemID uint64 `json:"item_id"` // 商品ID
-	Count  int32  `json:"count"`   // 购买数量
+	ItemID       uint64 `json:"item_id"`       // 商品ID
+	Count        int32  `json:"count"`         // 购买数量
+	CurrencyType int32  `json:"currency_type"` // 货币类型：0=金币 1=荣誉 2=公会币
 }
 
-// S2SShopBuyResp 服务端购买结果
-type S2SShopBuyResp struct {
-	Code   uint32 `json:"code"`   // 0=成功 1=金币不足 2=库存不足 3=等级不足
+// S2CShopBuyResp 服务端购买结果
+type S2CShopBuyResp struct {
+	Code   uint32 `json:"code"`    // 0=成功 1=金币不足 2=库存不足 3=等级不足
 	ItemID uint64 `json:"item_id"` // 商品ID
 	Count  int32  `json:"count"`   // 购买数量
 }
@@ -552,8 +564,8 @@ type C2SSkillLevelUp struct {
 	SkillID int32 `json:"skill_id"` // 技能ID
 }
 
-// S2SSkillLevelUpResp 服务端技能升级结果
-type S2SSkillLevelUpResp struct {
+// S2CSkillLevelUpResp 服务端技能升级结果
+type S2CSkillLevelUpResp struct {
 	Code     uint32 `json:"code"`      // 0=成功 1=技能点不足 2=技能不存在
 	SkillID  int32  `json:"skill_id"`  // 技能ID
 	NewLevel int32  `json:"new_level"` // 技能新等级
@@ -562,8 +574,8 @@ type S2SSkillLevelUpResp struct {
 // C2SSkillReset 客户端技能重置请求（消耗金币）
 type C2SSkillReset struct{}
 
-// S2SSkillResetResp 服务端技能重置结果
-type S2SSkillResetResp struct {
+// S2CSkillResetResp 服务端技能重置结果
+type S2CSkillResetResp struct {
 	Code         uint32 `json:"code"`          // 0=成功 1=金币不足
 	RefundPoints int32  `json:"refund_points"` // 返还的技能点数
 }
@@ -578,9 +590,9 @@ type C2SAttrAssign struct {
 
 // S2CAttrAssignResp 服务端属性分配结果
 type S2CAttrAssignResp struct {
-	Code       uint32 `json:"code"`       // 0=成功 1=点数不足 2=属性名无效
-	Attr       string `json:"attr"`       // 属性名
-	Val        int32  `json:"val"`        // 分配点数
+	Code       uint32 `json:"code"`        // 0=成功 1=点数不足 2=属性名无效
+	Attr       string `json:"attr"`        // 属性名
+	Val        int32  `json:"val"`         // 分配点数
 	AttrPoints int32  `json:"attr_points"` // 剩余属性点
 }
 

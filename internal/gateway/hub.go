@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"encoding/json"
 	"sync"
 
 	"hero-quest/internal/protocol"
@@ -10,12 +11,12 @@ import (
 // Hub 是连接管理中心，维护所有活跃的客户端连接，
 // 支持按连接ID和玩家ID查找，以及重连时的顶号逻辑。
 type Hub struct {
-	router      *Router                  // 消息路由器，用于分发业务消息
-	conns       map[string]*Conn         // 连接ID → 连接实例的映射
-	playerConns map[uint64]*Conn         // 玩家ID → 连接实例的映射，支持重连时顶号
-	mu          sync.RWMutex             // 保护 conns 和 playerConns 的读写锁
+	router      *Router                           // 消息路由器，用于分发业务消息
+	conns       map[string]*Conn                  // 连接ID → 连接实例的映射
+	playerConns map[uint64]*Conn                  // 玩家ID → 连接实例的映射，支持重连时顶号
+	mu          sync.RWMutex                      // 保护 conns 和 playerConns 的读写锁
 	onAuth      func(token string) (uint64, bool) // 认证回调，根据 token 返回玩家ID和是否合法
-	onClose     func(conn *Conn)         // 连接关闭回调，用于业务层清理玩家状态等
+	onClose     func(conn *Conn)                  // 连接关闭回调，用于业务层清理玩家状态等
 }
 
 // NewHub 创建并返回一个新的连接管理中心实例。
@@ -58,50 +59,79 @@ func (h *Hub) Register(conn *Conn) {
 		}
 		h.playerConns[conn.PlayerID] = conn
 	}
-	logger.Info("client connected", "conn_id", conn.ID, "player_id", conn.PlayerID)
+	logger.Info("客户端连接", "conn_id", conn.ID, "player_id", conn.PlayerID)
 }
 
 // Unregister 从 Hub 中注销连接，清理相关映射。
-// 关闭发送通道、标记连接为已关闭，并触发 onClose 回调通知业务层。
+// 仅当连接尚未被标记关闭时才关闭 send 通道并触发 onClose 回调，
+// 防止 Register 踢号（顶号）后旧 readPump 退出时二次 close 导致 panic。
 func (h *Hub) Unregister(conn *Conn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if _, ok := h.conns[conn.ID]; ok {
-		delete(h.conns, conn.ID)
-		if conn.PlayerID > 0 {
+	if _, ok := h.conns[conn.ID]; !ok {
+		return // 已被 Register 踢号时从 conns 删除，跳过
+	}
+	delete(h.conns, conn.ID)
+	if conn.PlayerID > 0 {
+		// 仅当此连接仍是该玩家的当前连接时才清除映射，
+		// 防止旧 readPump 的 Unregister 误删新连接的映射
+		if cur, ok := h.playerConns[conn.PlayerID]; ok && cur.ID == conn.ID {
 			delete(h.playerConns, conn.PlayerID)
 		}
-		close(conn.send)
-		conn.mu.Lock()
-		conn.closed = true
-		conn.mu.Unlock()
-		if h.onClose != nil {
-			h.onClose(conn)
-		}
-		logger.Info("client disconnected", "conn_id", conn.ID, "player_id", conn.PlayerID)
 	}
+	// 检查 closed 标记，避免重复 close(send) 导致 panic
+	conn.mu.Lock()
+	if conn.closed {
+		conn.mu.Unlock()
+		return
+	}
+	conn.closed = true
+	conn.mu.Unlock()
+	close(conn.send)
+	if h.onClose != nil {
+		h.onClose(conn)
+	}
+	logger.Info("客户端断开连接", "conn_id", conn.ID, "player_id", conn.PlayerID)
 }
 
 // Broadcast 向所有活跃连接广播消息。
+// 预序列化一次，避免万人在线时重复 json.Marshal。
 func (h *Hub) Broadcast(msgID uint16, v any) {
+	msg := h.marshalMsg(msgID, v)
+	if msg == nil {
+		return
+	}
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	for _, c := range h.conns {
-		c.Send(msgID, v)
+		c.SendRaw(msg)
 	}
 }
 
-// BroadcastToLayer 向指定层级的所有连接广播消息，排除指定连接ID。
-// 注意：当前实现未使用 layer 参数，所有非排除连接都会收到消息，
-// 后续可根据层级字段做更精确的过滤。
-func (h *Hub) BroadcastToLayer(layer int32, msgID uint16, v any, excludeID string) {
+// BroadcastToLayer 向指定层级的玩家连接广播消息。
+// layerLookup 用于根据玩家ID获取当前所在层，返回0表示不在地下城。
+func (h *Hub) BroadcastToLayer(layer int32, msgID uint16, v any, layerLookup func(playerID uint64) int32) {
+	msg := h.marshalMsg(msgID, v)
+	if msg == nil {
+		return
+	}
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	for _, c := range h.conns {
-		if c.ID != excludeID {
-			c.Send(msgID, v)
+		if c.PlayerID > 0 && layerLookup(c.PlayerID) == layer {
+			c.SendRaw(msg)
 		}
 	}
+}
+
+// marshalMsg 将消息ID和数据序列化为二进制格式，供广播使用。
+func (h *Hub) marshalMsg(msgID uint16, v any) []byte {
+	body, err := json.Marshal(v)
+	if err != nil {
+		logger.Error("broadcast marshal failed", "msg_id", msgID, "err", err)
+		return nil
+	}
+	return encodeMessage(msgID, body)
 }
 
 // GetConnByPlayerID 根据玩家ID查找对应的活跃连接。
@@ -110,6 +140,19 @@ func (h *Hub) GetConnByPlayerID(playerID uint64) *Conn {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return h.playerConns[playerID]
+}
+
+// SendToPlayer 向指定玩家发送消息。
+// 如果玩家在线，将消息发送到该玩家的当前连接；离线则静默丢弃。
+// 用于私聊、交易通知等需要定点推送的场景。
+func (h *Hub) SendToPlayer(playerID uint64, msgID uint16, v any) error {
+	h.mu.RLock()
+	conn, ok := h.playerConns[playerID]
+	h.mu.RUnlock()
+	if !ok {
+		return nil
+	}
+	return conn.Send(msgID, v)
 }
 
 // OnlineCount 返回当前在线连接数。

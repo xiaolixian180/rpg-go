@@ -1,24 +1,24 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 
 	"hero-quest/internal/gateway"
 	"hero-quest/internal/protocol"
 	"hero-quest/internal/service"
+	"hero-quest/internal/service/skill"
 	"hero-quest/pkg/errors"
 )
 
 // SkillHandler 技能模块消息处理器
-// 负责处理技能升级和技能重置的网络消息
 type SkillHandler struct {
-	skillSvc service.SkillService // 技能服务接口
+	world    service.World
+	skillSvc skill.SkillService
 }
 
 // NewSkillHandler 创建技能模块处理器实例
-func NewSkillHandler(skillSvc service.SkillService) *SkillHandler {
-	return &SkillHandler{skillSvc: skillSvc}
+func NewSkillHandler(world service.World, skillSvc skill.SkillService) *SkillHandler {
+	return &SkillHandler{world: world, skillSvc: skillSvc}
 }
 
 // HandleSkillLevelUp 处理技能升级请求
@@ -31,21 +31,27 @@ func (h *SkillHandler) HandleSkillLevelUp(conn *gateway.Conn, body []byte) {
 	// 反序列化技能升级请求
 	var req protocol.C2SSkillLevelUp
 	if err := json.Unmarshal(body, &req); err != nil {
-		conn.Send(protocol.MsgIDSkillLevelUpResp, &protocol.S2SSkillLevelUpResp{
+		conn.Send(protocol.MsgIDSkillLevelUpResp, &protocol.S2CSkillLevelUpResp{
 			Code: errors.ErrParamInvalid.Code,
 		})
 		return
 	}
 
+	// 获取在线玩家
+	player := onlinePlayer(h.world, conn)
+	if player == nil {
+		return
+	}
+
 	// 调用技能服务执行升级逻辑（每次消耗1点技能点）
-	lr, ge := h.skillSvc.LevelUp(context.Background(), conn.PlayerID, req.SkillID, 1)
+	lr, ge := h.skillSvc.LevelUp(connCtx(conn), player, req.SkillID)
 	if ge != nil {
-		conn.Send(protocol.MsgIDSkillLevelUpResp, &protocol.S2SSkillLevelUpResp{Code: ge.Code})
+		conn.Send(protocol.MsgIDSkillLevelUpResp, &protocol.S2CSkillLevelUpResp{Code: ge.Code})
 		return
 	}
 
 	// 升级成功，发送新等级
-	conn.Send(protocol.MsgIDSkillLevelUpResp, &protocol.S2SSkillLevelUpResp{
+	conn.Send(protocol.MsgIDSkillLevelUpResp, &protocol.S2CSkillLevelUpResp{
 		Code:     errors.ErrSuccess.Code,
 		SkillID:  lr.SkillID,
 		NewLevel: lr.NewLevel,
@@ -62,21 +68,27 @@ func (h *SkillHandler) HandleSkillReset(conn *gateway.Conn, body []byte) {
 	// 反序列化技能重置请求（无额外参数，仅校验格式）
 	var req protocol.C2SSkillReset
 	if err := json.Unmarshal(body, &req); err != nil {
-		conn.Send(protocol.MsgIDSkillResetResp, &protocol.S2SSkillResetResp{
+		conn.Send(protocol.MsgIDSkillResetResp, &protocol.S2CSkillResetResp{
 			Code: errors.ErrParamInvalid.Code,
 		})
 		return
 	}
 
-	// 调用技能服务执行重置逻辑（重置费用为1000金币，由调用方决定）
-	rr, ge := h.skillSvc.Reset(context.Background(), conn.PlayerID, 1000)
+	// 获取在线玩家
+	player := onlinePlayer(h.world, conn)
+	if player == nil {
+		return
+	}
+
+	// 调用技能服务执行重置逻辑
+	rr, ge := h.skillSvc.Reset(connCtx(conn), player, h.world.Config().SkillResetCost)
 	if ge != nil {
-		conn.Send(protocol.MsgIDSkillResetResp, &protocol.S2SSkillResetResp{Code: ge.Code})
+		conn.Send(protocol.MsgIDSkillResetResp, &protocol.S2CSkillResetResp{Code: ge.Code})
 		return
 	}
 
 	// 重置成功，发送返还的技能点数
-	conn.Send(protocol.MsgIDSkillResetResp, &protocol.S2SSkillResetResp{
+	conn.Send(protocol.MsgIDSkillResetResp, &protocol.S2CSkillResetResp{
 		Code:         errors.ErrSuccess.Code,
 		RefundPoints: rr.RefundPoints,
 	})

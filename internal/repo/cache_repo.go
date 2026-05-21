@@ -4,10 +4,13 @@ package repo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"hero-quest/internal/cache"
+
+	"github.com/redis/go-redis/v9"
 )
 
 // ==================== 缓存数据访问实现 ====================
@@ -35,8 +38,12 @@ func (r *cacheRepo) SetPlayerCache(ctx context.Context, playerID uint64, data []
 func (r *cacheRepo) GetPlayerCache(ctx context.Context, playerID uint64) ([]byte, error) {
 	data, err := r.rds.GetPlayer(ctx, playerID)
 	if err != nil {
-		// redis.Nil 表示键不存在，视为缓存未命中而非错误
-		return nil, nil
+		if errors.Is(err, redis.Nil) {
+			// redis.Nil 表示键不存在，视为缓存未命中而非错误
+			return nil, nil
+		}
+		// 其他错误：记录日志并返回
+		return nil, fmt.Errorf("get player cache id=%d: %w", playerID, err)
 	}
 	return data, nil
 }
