@@ -38,6 +38,11 @@ func (c *Conn) Context() context.Context {
 	return c.traceCtx
 }
 
+// BindPlayer 将认证后的玩家ID绑定到当前连接。
+func (c *Conn) BindPlayer(playerID uint64) {
+	c.hub.BindPlayer(c, playerID)
+}
+
 // newConn 创建新的客户端连接实例
 func newConn(ws *websocket.Conn, hub *Hub, rateLimit int) *Conn {
 	return &Conn{

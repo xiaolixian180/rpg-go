@@ -6,6 +6,7 @@ package scheduler
 import (
 	"time"
 
+	"hero-quest/internal/protocol"
 	"hero-quest/internal/service/iface"
 	"hero-quest/pkg/logger"
 )
@@ -21,20 +22,25 @@ func RegisterMonsterRefreshTask(s *Scheduler, world iface.World) {
 				continue
 			}
 			d.Mu().Lock()
-			respawnCount := 0
+			refreshed := make([]protocol.MonsterData, 0)
 			for _, m := range d.Monsters {
 				m.Mu().Lock()
 				if m.Dead {
 					// 使用怪物自身的 MaxHp 恢复，避免模板查找错误
 					m.Hp = m.MaxHp
 					m.Dead = false
-					respawnCount++
+					refreshed = append(refreshed, protocol.MonsterData{
+						ID: m.ID, Name: m.Name, Hp: m.Hp, MaxHp: m.MaxHp, X: m.X, Y: m.Y,
+					})
 				}
 				m.Mu().Unlock()
 			}
 			d.Mu().Unlock()
-			if respawnCount > 0 {
-				logger.Debug("怪物已刷新", "layer", i, "count", respawnCount)
+			if len(refreshed) > 0 {
+				logger.Debug("怪物已刷新", "layer", i, "count", len(refreshed))
+				world.Hub().BroadcastToPlayers(world.LayerPlayerIDs(i), protocol.MsgIDMonsterRefresh, &protocol.S2CMonsterRefresh{
+					Monsters: refreshed,
+				})
 			}
 		}
 	})

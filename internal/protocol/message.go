@@ -14,7 +14,9 @@ type S2CLoginResp struct {
 }
 
 // C2SCreatePlayer 客户端创建角色请求
+// 创建角色同样携带 token，便于新账号在未登录状态下创建首个角色。
 type C2SCreatePlayer struct {
+	Token string `json:"token"` // 鉴权令牌
 	Name  string `json:"name"`  // 角色名称
 	Class int32  `json:"class"` // 职业：0=战士 1=法师 2=射手 3=牧师 4=刺客
 }

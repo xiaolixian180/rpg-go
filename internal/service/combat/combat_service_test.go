@@ -423,6 +423,7 @@ type mockWorld struct {
 
 func (m *mockWorld) GetOnlinePlayer(playerID uint64) *model.Player  { return nil }
 func (m *mockWorld) GetDungeon(layer int32) *model.DungeonLayer     { return m.dungeon }
+func (m *mockWorld) LayerPlayerIDs(layer int32) []uint64            { return nil }
 func (m *mockWorld) GetBoss(bossID uint64) *model.Boss              { return m.boss }
 func (m *mockWorld) AddBoss(boss *model.Boss)                       {}
 func (m *mockWorld) RemoveBoss(bossID uint64)                       {}

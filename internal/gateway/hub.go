@@ -11,12 +11,11 @@ import (
 // Hub 是连接管理中心，维护所有活跃的客户端连接，
 // 支持按连接ID和玩家ID查找，以及重连时的顶号逻辑。
 type Hub struct {
-	router      *Router                           // 消息路由器，用于分发业务消息
-	conns       map[string]*Conn                  // 连接ID → 连接实例的映射
-	playerConns map[uint64]*Conn                  // 玩家ID → 连接实例的映射，支持重连时顶号
-	mu          sync.RWMutex                      // 保护 conns 和 playerConns 的读写锁
-	onAuth      func(token string) (uint64, bool) // 认证回调，根据 token 返回玩家ID和是否合法
-	onClose     func(conn *Conn)                  // 连接关闭回调，用于业务层清理玩家状态等
+	router      *Router          // 消息路由器，用于分发业务消息
+	conns       map[string]*Conn // 连接ID → 连接实例的映射
+	playerConns map[uint64]*Conn // 玩家ID → 连接实例的映射，支持重连时顶号
+	mu          sync.RWMutex     // 保护 conns 和 playerConns 的读写锁
+	onClose     func(conn *Conn) // 连接关闭回调，用于业务层清理玩家状态等
 }
 
 // NewHub 创建并返回一个新的连接管理中心实例。
@@ -26,12 +25,6 @@ func NewHub(router *Router) *Hub {
 		conns:       make(map[string]*Conn),
 		playerConns: make(map[uint64]*Conn),
 	}
-}
-
-// SetAuthHandler 设置认证回调函数。
-// 回调接收 token 字符串，返回玩家ID和认证是否成功。
-func (h *Hub) SetAuthHandler(fn func(token string) (uint64, bool)) {
-	h.onAuth = fn
 }
 
 // SetCloseHandler 设置连接关闭回调函数。
@@ -60,6 +53,26 @@ func (h *Hub) Register(conn *Conn) {
 		h.playerConns[conn.PlayerID] = conn
 	}
 	logger.Info("客户端连接", "conn_id", conn.ID, "player_id", conn.PlayerID)
+}
+
+// BindPlayer 将已认证玩家绑定到连接。
+// 如果该玩家已有旧连接，会先踢掉旧连接。
+func (h *Hub) BindPlayer(conn *Conn, playerID uint64) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if _, ok := h.conns[conn.ID]; !ok {
+		return
+	}
+	if old, ok := h.playerConns[playerID]; ok && old.ID != conn.ID {
+		old.Send(protocol.MsgIDKick, &protocol.S2CKick{Reason: "账号在其他地方登录"})
+		close(old.send)
+		old.mu.Lock()
+		old.closed = true
+		old.mu.Unlock()
+		delete(h.conns, old.ID)
+	}
+	conn.PlayerID = playerID
+	h.playerConns[playerID] = conn
 }
 
 // Unregister 从 Hub 中注销连接，清理相关映射。
@@ -119,6 +132,22 @@ func (h *Hub) BroadcastToLayer(layer int32, msgID uint16, v any, layerLookup fun
 	defer h.mu.RUnlock()
 	for _, c := range h.conns {
 		if c.PlayerID > 0 && layerLookup(c.PlayerID) == layer {
+			c.SendRaw(msg)
+		}
+	}
+}
+
+// BroadcastToPlayers 向指定玩家列表广播消息。
+// 消息只序列化一次，离线玩家会被静默跳过。
+func (h *Hub) BroadcastToPlayers(playerIDs []uint64, msgID uint16, v any) {
+	msg := h.marshalMsg(msgID, v)
+	if msg == nil {
+		return
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for _, playerID := range playerIDs {
+		if c, ok := h.playerConns[playerID]; ok {
 			c.SendRaw(msg)
 		}
 	}

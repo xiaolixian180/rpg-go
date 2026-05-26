@@ -155,31 +155,19 @@ func main() {
 		})
 	})
 
+	// JWT 管理器：由登录/创建角色协议消息完成鉴权
+	jwtMgr := auth.NewJWTManager(cfg.JWT.Secret, cfg.JWT.ExpireHours)
+
 	// Handler（消息处理层）
 	h := handler.New(
 		gm, // World 接口
 		playerSvc, dungeonSvc, combatSvc, bossSvc, equipSvc,
 		pvpSvc, petSvc, shopSvc, tradeSvc, skillSvc, rankSvc,
 		bus,
+		jwtMgr,
 	)
 	h.Register(router)
 	logger.Info("消息路由注册完成")
-
-	// JWT 鉴权
-	jwtMgr := auth.NewJWTManager(cfg.JWT.Secret, cfg.JWT.ExpireHours)
-
-	// 鉴权回调：解析 JWT 令牌，返回玩家ID
-	gw.Hub().SetAuthHandler(func(token string) (uint64, bool) {
-		if token == "" {
-			return 0, false
-		}
-		claims, err := jwtMgr.ParseToken(token)
-		if err != nil {
-			logger.Warn("JWT解析失败", "err", err)
-			return 0, false
-		}
-		return claims.PlayerID, true
-	})
 
 	// 断线回调
 	gw.Hub().SetCloseHandler(func(conn *gateway.Conn) {

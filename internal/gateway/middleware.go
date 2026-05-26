@@ -1,12 +1,9 @@
 package gateway
 
 import (
-	"expvar"
-	"strconv"
-	"time"
+	"runtime/debug"
 
 	"hero-quest/pkg/logger"
-	"runtime/debug"
 )
 
 // Middleware 消息处理中间件。
@@ -66,41 +63,3 @@ func AuthGuardMiddleware(whitelist ...uint16) Middleware {
 		next(conn, body)
 	}
 }
-
-// TraceMiddleware 为每条消息生成唯一 trace_id，写入连接的 traceCtx，
-// 后续 handler/service 通过 context 传播实现全链路追踪。
-func TraceMiddleware(msgID uint16, conn *Conn, body []byte, next Handler) {
-	traceID := logger.NewTraceID()
-	conn.traceCtx = logger.WithTrace(conn.traceCtx, traceID)
-	next(conn, body)
-}
-
-// AccessLogMiddleware 记录每条消息的请求/响应日志（含耗时）。
-// 放在 TraceMiddleware 之后，确保有 trace_id。
-func AccessLogMiddleware(msgID uint16, conn *Conn, body []byte, next Handler) {
-	start := time.Now()
-	ctx := conn.Context()
-
-	next(conn, body)
-
-	cost := time.Since(start)
-	logger.TInfo(ctx, "请求处理完成",
-		"msg_id", msgID, "conn_id", conn.ID, "player_id", conn.PlayerID,
-		"cost_ms", cost.Milliseconds())
-}
-
-// MetricsMiddleware 记录每条消息的处理延迟和消息计数。
-func MetricsMiddleware(msgID uint16, conn *Conn, body []byte, next Handler) {
-	start := time.Now()
-	defer func() {
-		key := strconv.Itoa(int(msgID))
-		msgCount.Add(key, 1)
-		msgLatency.Add(key, time.Since(start).Nanoseconds())
-	}()
-	next(conn, body)
-}
-
-var (
-	msgCount   = expvar.NewMap("gateway_msg_count")
-	msgLatency = expvar.NewMap("gateway_msg_latency_ns")
-)

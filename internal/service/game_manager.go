@@ -84,6 +84,21 @@ func (gm *GameManager) GetDungeon(layer int32) *model.DungeonLayer {
 	return gm.dungeons[layer]
 }
 
+// LayerPlayerIDs 获取指定层当前玩家ID快照。
+func (gm *GameManager) LayerPlayerIDs(layer int32) []uint64 {
+	d := gm.dungeons[layer]
+	if d == nil {
+		return nil
+	}
+	d.Mu().RLock()
+	defer d.Mu().RUnlock()
+	ids := make([]uint64, 0, len(d.Players))
+	for playerID := range d.Players {
+		ids = append(ids, playerID)
+	}
+	return ids
+}
+
 // GetBoss 获取指定Boss实例
 func (gm *GameManager) GetBoss(bossID uint64) *model.Boss {
 	if v, ok := gm.bosses.Load(bossID); ok {

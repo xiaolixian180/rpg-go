@@ -20,6 +20,7 @@ import (
 	"hero-quest/internal/service/shop"
 	"hero-quest/internal/service/skill"
 	"hero-quest/internal/service/trade"
+	"hero-quest/pkg/auth"
 	"hero-quest/pkg/errors"
 	"hero-quest/pkg/logger"
 )
@@ -56,11 +57,12 @@ func New(
 	skillSvc skill.SkillService,
 	rankSvc rank.RankService,
 	bus *eventbus.Bus,
+	jwtMgr *auth.JWTManager,
 ) *Handler {
 	return &Handler{
 		world:   world,
 		bus:     bus,
-		auth:    NewAuthHandler(world, playerSvc),
+		auth:    NewAuthHandler(world, playerSvc, jwtMgr),
 		dungeon: NewDungeonHandler(world, dungeonSvc),
 		combat:  NewCombatHandler(world, combatSvc, bossSvc, bus),
 		equip:   NewEquipHandler(world, equipSvc),
@@ -76,50 +78,50 @@ func New(
 
 // Register 将所有消息ID与对应的处理函数注册到网关路由器
 func (h *Handler) Register(router *gateway.Router) {
-	router.Register(1001, h.auth.HandleLogin)
-	router.Register(1003, h.auth.HandleCreatePlayer)
+	router.Register(protocol.MsgIDLogin, h.auth.HandleLogin)
+	router.Register(protocol.MsgIDCreatePlayer, h.auth.HandleCreatePlayer)
 
-	router.Register(1101, h.dungeon.HandleEnterDungeon)
-	router.Register(1103, h.dungeon.HandleLeaveDungeon)
-	router.Register(1107, h.dungeon.HandleLayerTeleport)
+	router.Register(protocol.MsgIDEnterDungeon, h.dungeon.HandleEnterDungeon)
+	router.Register(protocol.MsgIDLeaveDungeon, h.dungeon.HandleLeaveDungeon)
+	router.Register(protocol.MsgIDLayerTeleport, h.dungeon.HandleLayerTeleport)
 
-	router.Register(1201, h.combat.HandleAttack)
-	router.Register(1205, h.combat.HandleSkillCast)
-	router.Register(1209, h.combat.HandleCollectResource)
+	router.Register(protocol.MsgIDAttack, h.combat.HandleAttack)
+	router.Register(protocol.MsgIDSkillCast, h.combat.HandleSkillCast)
+	router.Register(protocol.MsgIDCollectResource, h.combat.HandleCollectResource)
 
-	router.Register(1301, h.equip.HandleStrengthen)
-	router.Register(1303, h.equip.HandleEnchant)
-	router.Register(1305, h.equip.HandleWear)
-	router.Register(1307, h.equip.HandleUnload)
-	router.Register(1309, h.equip.HandleForge)
+	router.Register(protocol.MsgIDEquipStrengthen, h.equip.HandleStrengthen)
+	router.Register(protocol.MsgIDEquipEnchant, h.equip.HandleEnchant)
+	router.Register(protocol.MsgIDEquipWear, h.equip.HandleWear)
+	router.Register(protocol.MsgIDEquipUnload, h.equip.HandleUnload)
+	router.Register(protocol.MsgIDForge, h.equip.HandleForge)
 
-	router.Register(1401, h.pvp.HandlePvpAttack)
-	router.Register(1404, h.pvp.HandleBountyHunt)
-	router.Register(1406, h.pvp.HandleRevenge)
+	router.Register(protocol.MsgIDPvpAttack, h.pvp.HandlePvpAttack)
+	router.Register(protocol.MsgIDBountyHunt, h.pvp.HandleBountyHunt)
+	router.Register(protocol.MsgIDRevenge, h.pvp.HandleRevenge)
 
-	router.Register(1501, h.dungeon.HandleMove)
+	router.Register(protocol.MsgIDMove, h.dungeon.HandleMove)
 
-	router.Register(1601, h.pet.HandleSummon)
-	router.Register(1603, h.pet.HandleRecall)
-	router.Register(1604, h.pet.HandleLevelUp)
-	router.Register(1605, h.pet.HandleEvolve)
-	router.Register(1607, h.pet.HandleExplore)
-	router.Register(1609, h.pet.HandleCompose)
+	router.Register(protocol.MsgIDPetSummon, h.pet.HandleSummon)
+	router.Register(protocol.MsgIDPetRecall, h.pet.HandleRecall)
+	router.Register(protocol.MsgIDPetLevelUp, h.pet.HandleLevelUp)
+	router.Register(protocol.MsgIDPetEvolve, h.pet.HandleEvolve)
+	router.Register(protocol.MsgIDPetExplore, h.pet.HandleExplore)
+	router.Register(protocol.MsgIDPetCompose, h.pet.HandleCompose)
 
-	router.Register(1801, h.shop.HandleShopList)
-	router.Register(1803, h.shop.HandleShopBuy)
+	router.Register(protocol.MsgIDShopList, h.shop.HandleShopList)
+	router.Register(protocol.MsgIDShopBuy, h.shop.HandleShopBuy)
 
-	router.Register(1701, h.trade.HandleTradeList)
-	router.Register(1703, h.trade.HandleTradePublish)
-	router.Register(1705, h.trade.HandleTradeBuy)
-	router.Register(1707, h.trade.HandleTradeCancel)
+	router.Register(protocol.MsgIDTradeList, h.trade.HandleTradeList)
+	router.Register(protocol.MsgIDTradePublish, h.trade.HandleTradePublish)
+	router.Register(protocol.MsgIDTradeBuy, h.trade.HandleTradeBuy)
+	router.Register(protocol.MsgIDTradeCancel, h.trade.HandleTradeCancel)
 
-	router.Register(1901, h.skill.HandleSkillLevelUp)
-	router.Register(1903, h.skill.HandleSkillReset)
+	router.Register(protocol.MsgIDSkillLevelUp, h.skill.HandleSkillLevelUp)
+	router.Register(protocol.MsgIDSkillReset, h.skill.HandleSkillReset)
 
-	router.Register(2101, h.rank.HandleRankingList)
+	router.Register(protocol.MsgIDRankingList, h.rank.HandleRankingList)
 
-	router.Register(2001, h.attr.HandleAttrAssign)
+	router.Register(protocol.MsgIDAttrAssign, h.attr.HandleAttrAssign)
 }
 
 // onlinePlayer 获取内存中的在线玩家

@@ -4,7 +4,6 @@ package gateway
 
 import (
 	"context"
-	"expvar"
 	"fmt"
 	"net/http"
 
@@ -32,20 +31,17 @@ type Gateway struct {
 // New 创建并返回一个新的网关实例。
 // 默认限流为每秒30条消息，注册以下中间件链（从外到内）：
 //
-//	Recovery → Trace → AccessLog → RateLimit → MaxBodySize(4KB) → AuthGuard → Metrics → Handler
+//	Recovery → RateLimit → MaxBodySize(4KB) → AuthGuard → Handler
 func New(addr string, router *Router) *Gateway {
 	// 注册默认中间件（从外到内执行）
 	router.Use(
 		RecoveryMiddleware,          // 最外层：兜底 panic
-		TraceMiddleware,             // 生成 trace_id
-		AccessLogMiddleware,         // 请求日志（含耗时）
 		RateLimitMiddleware,         // 限流
 		MaxBodySizeMiddleware(4096), // 最大包大小 4KB
 		AuthGuardMiddleware( // 认证守卫
 			protocol.MsgIDLogin,        // 登录免认证
 			protocol.MsgIDCreatePlayer, // 创建角色免认证
 		),
-		MetricsMiddleware, // 最内层：指标采集
 	)
 
 	gw := &Gateway{
@@ -86,24 +82,7 @@ func New(addr string, router *Router) *Gateway {
 			return
 		}
 
-		// 从 URL 参数中获取认证 token
-		token := r.URL.Query().Get("token")
-
-		// 认证检查必须在 Register 之前，否则认证失败的连接会泄漏在 Hub 中
-		var playerID uint64
-		if gw.hub.onAuth != nil {
-			pid, ok := gw.hub.onAuth(token)
-			if !ok {
-				logger.Warn("认证失败")
-				ws.Close(websocket.StatusNormalClosure, "auth failed")
-				return
-			}
-			playerID = pid
-		}
-
-		// 认证通过后才创建连接并注册
 		conn := newConn(ws, gw.hub, gw.rateLimit)
-		conn.PlayerID = playerID
 
 		// 将连接注册到 Hub，然后启动读写泵
 		gw.hub.Register(conn)
@@ -122,9 +101,6 @@ func New(addr string, router *Router) *Gateway {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(fmt.Sprintf("%d", gw.hub.OnlineCount())))
 	})
-
-	// 指标端点（Go 内置 expvar，零依赖）
-	mux.Handle("/debug/vars", expvar.Handler())
 
 	gw.server.Handler = mux
 	return gw

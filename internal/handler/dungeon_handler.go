@@ -114,17 +114,11 @@ func (h *DungeonHandler) HandleMove(conn *gateway.Conn, body []byte) {
 	playerID := player.ID
 	layer := player.Layer
 	player.Mu().Unlock()
-	h.world.Hub().BroadcastToLayer(layer, protocol.MsgIDPlayerMove, &protocol.S2CPlayerMove{
+	if layer <= 0 {
+		return
+	}
+	h.world.Hub().BroadcastToPlayers(h.world.LayerPlayerIDs(layer), protocol.MsgIDPlayerMove, &protocol.S2CPlayerMove{
 		PlayerID: playerID, X: req.X, Y: req.Y,
-	}, func(pid uint64) int32 {
-		p := h.world.GetOnlinePlayer(pid)
-		if p == nil {
-			return 0
-		}
-		p.Mu().RLock()
-		l := p.Layer
-		p.Mu().RUnlock()
-		return l
 	})
 }
 

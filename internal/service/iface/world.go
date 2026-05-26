@@ -17,6 +17,8 @@ type World interface {
 	GetOnlinePlayer(playerID uint64) *model.Player
 	// GetDungeon 获取指定层的地下城实例
 	GetDungeon(layer int32) *model.DungeonLayer
+	// LayerPlayerIDs 获取指定层当前玩家ID快照
+	LayerPlayerIDs(layer int32) []uint64
 	// GetBoss 获取指定Boss实例
 	GetBoss(bossID uint64) *model.Boss
 	// AddBoss 添加Boss实例到世界
