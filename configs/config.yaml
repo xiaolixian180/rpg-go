@@ -12,10 +12,14 @@ database:
   host: "mysql"
   port: 3306
   user: "root"
-  password: "HQ_DB_PASSWORD"     # use HQ_DATABASE_PASSWORD env var in production
+  password: "HQ_DATABASE_PASSWORD"     # use HQ_DATABASE_PASSWORD env var in production
   dbname: "hero_quest"
   max_idle: 10
   max_open: 100
+
+mongodb:
+  uri: "mongodb://root:HQ_MONGO_PASSWORD@mongodb:27017"
+  database: "hero_quest"
 
 redis:
   host: "redis"

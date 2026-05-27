@@ -6,6 +6,7 @@ package config
 import (
 	"fmt"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
 )
 
@@ -29,9 +30,16 @@ func DefaultGameConfig() GameConfig {
 type Config struct {
 	Server ServerConfig `yaml:"server"`   // 服务器网络与连接相关配置
 	DB     DBConfig     `yaml:"database"` // 数据库连接与连接池配置
+	Mongo  MongoConfig  `yaml:"mongodb"`  // MongoDB 文档数据库连接配置
 	Redis  RedisConfig  `yaml:"redis"`    // Redis 缓存连接配置
 	JWT    JWTConfig    `yaml:"jwt"`      // JWT 认证配置
 	Game   GameConfig   `yaml:"game"`     // 游戏核心逻辑与数值配置
+}
+
+// MongoConfig 定义 MongoDB 的连接参数。
+type MongoConfig struct {
+	URI      string `yaml:"uri"`      // MongoDB 连接 URI，如 "mongodb://root:password@localhost:27017"
+	Database string `yaml:"database"` // 数据库名称
 }
 
 // ServerConfig 定义服务器的网络参数和连接控制策略，
@@ -179,7 +187,10 @@ func Load(path string) (*Config, error) {
 	}
 
 	var cfg Config
-	if err := v.Unmarshal(&cfg); err != nil {
+	// 使用 yaml tag 名称匹配（Viper 默认用 mapstructure tag，与 yaml tag 不一致会导致字段映射失败）
+	if err := v.Unmarshal(&cfg, func(dc *mapstructure.DecoderConfig) {
+		dc.TagName = "yaml"
+	}); err != nil {
 		return nil, err
 	}
 

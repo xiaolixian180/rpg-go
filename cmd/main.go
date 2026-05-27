@@ -81,6 +81,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	// MongoDB
+	mdb, err := database.NewMongo(cfg.Mongo.URI, cfg.Mongo.Database)
+	if err != nil {
+		logger.Error("连接 MongoDB 失败", "err", err)
+		os.Exit(1)
+	}
+
 	// Redis
 	rdb, err := cache.New(cache.Config{
 		Host: cfg.Redis.Host, Port: cfg.Redis.Port,
@@ -93,13 +100,14 @@ func main() {
 
 	// Repos
 	playerRepo := repo.NewPlayerRepo(db)
-	equipRepo := repo.NewEquipRepo(db)
-	petRepo := repo.NewPetRepo(db)
+	mysqlEquipRepo := repo.NewEquipRepo(db)        // MySQL 原始实现，作为混合模式的底层
+	equipRepo := repo.NewMongoEquipRepo(mysqlEquipRepo, mdb) // 混合：MySQL 主记录 + MongoDB 附魔
+	petRepo := repo.NewMongoPetRepo(mdb)           // 纯 MongoDB
 	tradeRepo := repo.NewTradeRepo(db)
 	shopRepo := repo.NewShopRepo(db)
-	skillRepo := repo.NewSkillRepo(db)
+	skillRepo := repo.NewMongoSkillRepo(mdb)       // 纯 MongoDB
 	cacheRepo := repo.NewCacheRepo(rdb)
-	invRepo := repo.NewInventoryRepo(db)
+	invRepo := repo.NewMongoInventoryRepo(mdb)     // 纯 MongoDB
 
 	// Services（不依赖 World 的服务）
 	playerSvc := player.NewPlayerService(playerRepo, cacheRepo)
@@ -211,6 +219,11 @@ func main() {
 		logger.Error("关闭 Redis 连接失败", "err", err)
 	} else {
 		logger.Info("Redis 连接已关闭")
+	}
+	if err := mdb.Close(); err != nil {
+		logger.Error("关闭 MongoDB 连接失败", "err", err)
+	} else {
+		logger.Info("MongoDB 连接已关闭")
 	}
 	if err := db.Close(); err != nil {
 		logger.Error("关闭数据库失败", "err", err)

@@ -68,23 +68,18 @@ func New(cfg Config) (*DB, error) {
 
 // InitSchema 初始化数据库表结构，使用 GORM 的 AutoMigrate 自动迁移。
 // 若表已存在则不会重建，可安全重复调用。
-// 共迁移 6 张表：
+// 共迁移 4 张表（技能、背包、宠物已迁移到 MongoDB）：
 //   - player: 玩家主表，存储角色基础属性（职业、等级、经验、金币、荣誉、击杀值、
 //     力量/敏捷/智力/体质、可用属性点等）
-//   - player_skill: 玩家技能表，每个玩家可拥有多个技能，(player_id, skill_id) 唯一
-//   - player_equip: 玩家装备表，按槽位存储装备信息，含强化等级和附魔属性
-//   - player_pet: 玩家宠物表，记录宠物 ID、等级、品质、技能列表
+//   - player_equip: 玩家装备表，按槽位存储装备信息，含强化等级（附魔属性存 MongoDB）
 //   - dungeon_progress: 副本进度表，记录每位玩家的最大通关层数
 //   - trade_order: 交易订单表，记录玩家上架出售的装备、品质、价格及订单状态
 func (db *DB) InitSchema() error {
 	err := db.AutoMigrate(
 		&model.PlayerORM{},
-		&model.PlayerSkillORM{},
 		&model.PlayerEquipORM{},
-		&model.PlayerPetORM{},
 		&model.DungeonProgressORM{},
 		&model.TradeOrderORM{},
-		&model.PlayerInventoryORM{},
 	)
 	if err != nil {
 		return fmt.Errorf("auto migrate: %w", err)
