@@ -44,6 +44,47 @@ func (h *DungeonHandler) HandleEnterDungeon(conn *gateway.Conn, body []byte) {
 	}
 
 	conn.Send(protocol.MsgIDEnterDungeonResp, toDungeonResp(dl, req.Layer, errors.ErrSuccess.Code))
+
+	// Boss层处理：检查是否需要生成Boss，并通知客户端
+	if model.IsBossLayer(req.Layer) {
+		h.handleBossLayer(conn, req.Layer)
+	}
+}
+
+// handleBossLayer 处理进入Boss层：检查并生成Boss，广播Boss出现
+func (h *DungeonHandler) handleBossLayer(conn *gateway.Conn, layer int32) {
+	// 尝试重新生成Boss（如果冷却已过）
+	newBoss := h.world.SpawnBossIfNeeded(layer)
+
+	// 获取当前层的Boss（可能是刚生成的，也可能是已存在的）
+	boss := h.world.GetLayerBoss(layer)
+	if boss == nil {
+		return
+	}
+
+	// 向当前层所有玩家广播Boss出现
+	bossData := &protocol.S2CBossSpawn{
+		BossID: boss.ID,
+		Name:   boss.Name,
+		Hp:     boss.Hp,
+		MaxHp:  boss.MaxHp,
+		Layer:  boss.Layer,
+		X:      boss.X,
+		Y:      boss.Y,
+	}
+	for _, s := range boss.Skills {
+		bossData.Skills = append(bossData.Skills, protocol.BossSkillData{
+			SkillID: s.SkillID, Name: s.Name, CD: s.CD, Range: s.Range,
+		})
+	}
+
+	if newBoss != nil {
+		// 新生成的Boss，广播给当前层所有玩家
+		h.world.Hub().BroadcastToPlayers(h.world.LayerPlayerIDs(layer), protocol.MsgIDBossSpawn, bossData)
+	} else {
+		// Boss已存在，只发给刚进入的玩家
+		conn.Send(protocol.MsgIDBossSpawn, bossData)
+	}
 }
 
 // HandleLeaveDungeon 处理离开地下城请求
@@ -133,8 +174,14 @@ func toDungeonResp(dl *model.DungeonLayer, layer int32, code uint32) *protocol.S
 		return resp
 	}
 	for _, m := range dl.Monsters {
+		m.Mu().RLock()
+		dead := m.Dead
+		m.Mu().RUnlock()
+		if dead {
+			continue // 跳过已死亡的怪物
+		}
 		resp.Monsters = append(resp.Monsters, protocol.MonsterData{
-			ID: m.ID, Name: m.Name, Hp: m.Hp, MaxHp: m.MaxHp, X: m.X, Y: m.Y,
+			ID: m.ID, Name: m.Name, Hp: m.Hp, MaxHp: m.MaxHp, X: m.X, Y: m.Y, Elite: m.Elite,
 		})
 	}
 	for _, pl := range dl.Players {

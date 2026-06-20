@@ -31,6 +31,11 @@ const (
 	MsgIDPlayerRevive    uint16 = 1208 // 服务端→客户端：玩家复活
 	MsgIDCollectResource uint16 = 1209 // 客户端→服务端：采集资源
 	MsgIDCollectResult   uint16 = 1210 // 服务端→客户端：采集结果
+	MsgIDAutoBattle      uint16 = 1211 // 客户端→服务端：开启/关闭自动战斗
+	MsgIDAutoBattleResp  uint16 = 1212 // 服务端→客户端：自动战斗状态响应
+	MsgIDUseItem         uint16 = 1213 // 客户端→服务端：使用消耗品
+	MsgIDUseItemResp     uint16 = 1214 // 服务端→客户端：使用消耗品结果
+	MsgIDInventorySync   uint16 = 1215 // 服务端→客户端：库存同步推送
 
 	// 装备模块 1301-1399
 	MsgIDEquipStrengthen     uint16 = 1301 // 客户端→服务端：装备强化
@@ -69,6 +74,10 @@ const (
 	MsgIDPetExploreResp uint16 = 1608 // 服务端→客户端：宠物探险结果
 	MsgIDPetCompose     uint16 = 1609 // 客户端→服务端：宠物合成
 	MsgIDPetComposeResp uint16 = 1610 // 服务端→客户端：宠物合成结果
+	MsgIDPetEquip       uint16 = 1612 // 客户端→服务端：宠物穿戴装备
+	MsgIDPetEquipResp   uint16 = 1613 // 服务端→客户端：宠物穿戴装备结果
+	MsgIDPetUnequip     uint16 = 1614 // 客户端→服务端：宠物卸下装备
+	MsgIDPetUnequipResp uint16 = 1615 // 服务端→客户端：宠物卸下装备结果
 
 	// 交易行模块 1701-1799
 	MsgIDTradeList        uint16 = 1701 // 客户端→服务端：查询交易行列表
@@ -99,6 +108,29 @@ const (
 	// 排行榜模块 2101-2199
 	MsgIDRankingList     uint16 = 2101 // 客户端→服务端：查询排行榜
 	MsgIDRankingListResp uint16 = 2102 // 服务端→客户端：排行榜数据
+
+	// 组队模块 2201-2299
+	MsgIDTeamCreate       uint16 = 2201 // 客户端→服务端：创建队伍
+	MsgIDTeamInfoResp     uint16 = 2202 // 服务端→客户端：队伍信息响应（创建/查询/层级传送通用响应）
+	MsgIDTeamInvite       uint16 = 2203 // 客户端→服务端：邀请玩家入队
+	MsgIDTeamInvitePush   uint16 = 2204 // 服务端→客户端：被邀请通知（推送给目标）
+	MsgIDTeamInviteReply  uint16 = 2205 // 客户端→服务端：邀请回复（接受/拒绝）
+	MsgIDTeamInviteResult uint16 = 2206 // 服务端→客户端：邀请回复结果（推给邀请者）
+	MsgIDTeamLeave        uint16 = 2207 // 客户端→服务端：离开队伍
+	MsgIDTeamLeaveResp    uint16 = 2208 // 服务端→客户端：离开队伍结果
+	MsgIDTeamDismiss      uint16 = 2209 // 客户端→服务端：解散队伍（队长）
+	MsgIDTeamDismissResp  uint16 = 2210 // 服务端→客户端：解散队伍结果
+	MsgIDTeamKick         uint16 = 2211 // 客户端→服务端：踢出队员（队长）
+	MsgIDTeamKickResp     uint16 = 2212 // 服务端→客户端：踢出队员结果
+	MsgIDTeamQuery        uint16 = 2213 // 客户端→服务端：查询我的队伍
+	MsgIDTeamUpdate       uint16 = 2214 // 服务端→客户端：队伍状态变更推送（全员）
+
+	// 聊天模块 2301-2399
+	MsgIDChatSend        uint16 = 2301 // 客户端→服务端：发送聊天消息
+	MsgIDChatSendResp    uint16 = 2302 // 服务端→客户端：发送结果
+	MsgIDChatMessage     uint16 = 2303 // 服务端→客户端：聊天消息推送（世界/私聊/队伍）
+	MsgIDChatHistory     uint16 = 2304 // 客户端→服务端：查询历史消息
+	MsgIDChatHistoryResp uint16 = 2305 // 服务端→客户端：历史消息列表
 
 	// 系统模块 9001-9099
 	MsgIDBroadcast uint16 = 9001 // 服务端→客户端：全服广播

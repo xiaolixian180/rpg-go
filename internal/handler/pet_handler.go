@@ -5,6 +5,7 @@ import (
 
 	"hero-quest/internal/gateway"
 	"hero-quest/internal/protocol"
+	"hero-quest/internal/service"
 	"hero-quest/internal/service/pet"
 	"hero-quest/pkg/errors"
 )
@@ -12,12 +13,13 @@ import (
 // PetHandler 宠物模块消息处理器
 // 负责处理宠物召唤、收回、升级、进阶、探险和合成的网络消息
 type PetHandler struct {
+	world  service.World  // 游戏世界（获取在线玩家，管理出战宠物状态）
 	petSvc pet.PetService // 宠物服务接口
 }
 
 // NewPetHandler 创建宠物模块处理器实例
-func NewPetHandler(petSvc pet.PetService) *PetHandler {
-	return &PetHandler{petSvc: petSvc}
+func NewPetHandler(world service.World, petSvc pet.PetService) *PetHandler {
+	return &PetHandler{world: world, petSvc: petSvc}
 }
 
 // HandleSummon 处理宠物召唤请求
@@ -37,16 +39,24 @@ func (h *PetHandler) HandleSummon(conn *gateway.Conn, body []byte) {
 	}
 
 	// 调用宠物服务执行召唤逻辑
-	pet, ge := h.petSvc.Summon(connCtx(conn), conn.PlayerID, req.PetUID)
+	petObj, ge := h.petSvc.Summon(connCtx(conn), conn.PlayerID, req.PetUID)
 	if ge != nil {
 		conn.Send(protocol.MsgIDPetSummonResp, &protocol.S2CPetSummonResp{Code: ge.Code})
 		return
 	}
 
+	// 计算宠物战斗属性并设置到玩家的 ActivePet
+	petObj.CalcPetStats()
+	if player := h.world.GetOnlinePlayer(conn.PlayerID); player != nil {
+		player.Mu().Lock()
+		player.ActivePet = petObj
+		player.Mu().Unlock()
+	}
+
 	// 召唤成功，将 model.Pet 转换为协议层 PetData 并发送
 	conn.Send(protocol.MsgIDPetSummonResp, &protocol.S2CPetSummonResp{
 		Code: errors.ErrSuccess.Code,
-		Pet:  *toPetData(pet),
+		Pet:  *toPetData(petObj),
 	})
 }
 
@@ -75,6 +85,13 @@ func (h *PetHandler) HandleRecall(conn *gateway.Conn, body []byte) {
 		return
 	}
 
+	// 清除玩家的出战宠物状态
+	if player := h.world.GetOnlinePlayer(conn.PlayerID); player != nil {
+		player.Mu().Lock()
+		player.ActivePet = nil
+		player.Mu().Unlock()
+	}
+
 	// 收回成功
 	conn.Send(protocol.MsgIDPetRecallResp, &protocol.S2CPetRecallResp{
 		Code:   errors.ErrSuccess.Code,
@@ -98,9 +115,31 @@ func (h *PetHandler) HandleLevelUp(conn *gateway.Conn, body []byte) {
 		return
 	}
 
-	// 调用宠物服务执行升级逻辑（goldCost=100，升级费用由调用方决定）
-	lr, ge := h.petSvc.LevelUp(connCtx(conn), conn.PlayerID, req.PetUID, 100)
+	// 升级费用
+	const goldCost int64 = 100
+
+	// 先校验并扣除玩家金币
+	player := h.world.GetOnlinePlayer(conn.PlayerID)
+	if player == nil {
+		conn.Send(protocol.MsgIDPetLevelUp, &protocol.S2CPetLevelUp{Code: errors.ErrInternal.Code})
+		return
+	}
+	player.Mu().Lock()
+	if player.Gold < goldCost {
+		player.Mu().Unlock()
+		conn.Send(protocol.MsgIDPetLevelUp, &protocol.S2CPetLevelUp{Code: errors.ErrGoldNotEnough.Code})
+		return
+	}
+	player.Gold -= goldCost
+	player.Mu().Unlock()
+
+	// 调用宠物服务执行升级逻辑
+	lr, ge := h.petSvc.LevelUp(connCtx(conn), conn.PlayerID, req.PetUID, goldCost)
 	if ge != nil {
+		// 升级失败，退还金币
+		player.Mu().Lock()
+		player.Gold += goldCost
+		player.Mu().Unlock()
 		conn.Send(protocol.MsgIDPetLevelUp, &protocol.S2CPetLevelUp{Code: ge.Code})
 		return
 	}
@@ -205,5 +244,75 @@ func (h *PetHandler) HandleCompose(conn *gateway.Conn, body []byte) {
 		ResultID: cr.ResultID,
 		PetID:    cr.PetID,
 		Quality:  cr.Quality,
+	})
+}
+
+// HandlePetEquip 处理宠物穿戴装备请求
+func (h *PetHandler) HandlePetEquip(conn *gateway.Conn, body []byte) {
+	var req protocol.C2SPetEquip
+	if err := json.Unmarshal(body, &req); err != nil {
+		conn.Send(protocol.MsgIDPetEquipResp, &protocol.S2CPetEquipResp{
+			Code: errors.ErrParamInvalid.Code,
+		})
+		return
+	}
+
+	ge := h.petSvc.PetEquip(connCtx(conn), conn.PlayerID, req.PetUID, req.Slot, req.EquipID)
+	if ge != nil {
+		conn.Send(protocol.MsgIDPetEquipResp, &protocol.S2CPetEquipResp{Code: ge.Code})
+		return
+	}
+
+	// 如果是当前出战宠物，重新计算战斗属性
+	if player := h.world.GetOnlinePlayer(conn.PlayerID); player != nil {
+		player.Mu().RLock()
+		activePet := player.ActivePet
+		player.Mu().RUnlock()
+		if activePet != nil && activePet.UID == req.PetUID {
+			activePet.Mu().Lock()
+			activePet.CalcPetStats()
+			activePet.Mu().Unlock()
+		}
+	}
+
+	conn.Send(protocol.MsgIDPetEquipResp, &protocol.S2CPetEquipResp{
+		Code:   errors.ErrSuccess.Code,
+		PetUID: req.PetUID,
+		Slot:   req.Slot,
+	})
+}
+
+// HandlePetUnequip 处理宠物卸下装备请求
+func (h *PetHandler) HandlePetUnequip(conn *gateway.Conn, body []byte) {
+	var req protocol.C2SPetUnequip
+	if err := json.Unmarshal(body, &req); err != nil {
+		conn.Send(protocol.MsgIDPetUnequipResp, &protocol.S2CPetUnequipResp{
+			Code: errors.ErrParamInvalid.Code,
+		})
+		return
+	}
+
+	ge := h.petSvc.PetUnequip(connCtx(conn), conn.PlayerID, req.PetUID, req.Slot)
+	if ge != nil {
+		conn.Send(protocol.MsgIDPetUnequipResp, &protocol.S2CPetUnequipResp{Code: ge.Code})
+		return
+	}
+
+	// 如果是当前出战宠物，重新计算战斗属性
+	if player := h.world.GetOnlinePlayer(conn.PlayerID); player != nil {
+		player.Mu().RLock()
+		activePet := player.ActivePet
+		player.Mu().RUnlock()
+		if activePet != nil && activePet.UID == req.PetUID {
+			activePet.Mu().Lock()
+			activePet.CalcPetStats()
+			activePet.Mu().Unlock()
+		}
+	}
+
+	conn.Send(protocol.MsgIDPetUnequipResp, &protocol.S2CPetUnequipResp{
+		Code:   errors.ErrSuccess.Code,
+		PetUID: req.PetUID,
+		Slot:   req.Slot,
 	})
 }

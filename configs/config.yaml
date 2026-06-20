@@ -1,30 +1,30 @@
 server:
   host: "0.0.0.0"
-  port: 8080
+  port: 8081
   read_timeout: 10
   write_timeout: 10
   max_conn_per_ip: 5
   heartbeat_sec: 30
   reconnect_sec: 180
-  max_request_per_sec: 30
+  max_request_per_sec: 200
 
 database:
-  host: "mysql"
+  host: "127.0.0.1"
   port: 3306
   user: "root"
-  password: "HQ_DATABASE_PASSWORD"     # use HQ_DATABASE_PASSWORD env var in production
+  password: "root"
   dbname: "hero_quest"
   max_idle: 10
   max_open: 100
 
 mongodb:
-  uri: "mongodb://root:HQ_MONGO_PASSWORD@mongodb:27017"
+  uri: "mongodb://root:hero_quest_mongo_2026@127.0.0.1:27017"
   database: "hero_quest"
 
 redis:
-  host: "redis"
+  host: "127.0.0.1"
   port: 6379
-  password: "HQ_REDIS_PASSWORD"   # use HQ_REDIS_PASSWORD env var in production
+  password: ""
   db: 0
 
 jwt:

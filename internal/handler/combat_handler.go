@@ -37,11 +37,26 @@ func (h *CombatHandler) HandleAttack(conn *gateway.Conn, body []byte) {
 		}
 
 		conn.Send(protocol.MsgIDDamage, &protocol.S2CDamage{
-			TargetID: cr.TargetID,
-			Damage:   cr.Damage,
-			CurrHp:   cr.CurrHp,
-			IsDead:   cr.IsDead,
+			TargetID:  cr.TargetID,
+			Damage:    cr.Damage,
+			CurrHp:    cr.CurrHp,
+			IsDead:    cr.IsDead,
+			ExpGain:   cr.ExpGain,
+			GoldGain:  cr.GoldGain,
+			LevelUp:   cr.LevelUped,
+			NewLevel:  cr.NewLevel,
+			PetDamage: cr.PetDamage,
+			PetCrit:   cr.PetCrit,
+			PetDead:   cr.PetDead,
 		})
+
+		// 击杀后更新排行榜（不仅限于升级，每次击杀都同步当前等级/战力到排行榜）
+		if cr.IsDead {
+			h.bus.Publish(eventbus.TopicLevelUp, &eventbus.LevelUpEvent{
+				PlayerID: player.ID,
+				NewLevel: player.Level,
+			})
+		}
 
 		// Boss 死亡：处理掉落、通关进度、冷却、全服播报
 		if cr.IsDead && cr.IsBoss {
@@ -149,6 +164,33 @@ func (h *CombatHandler) handleBossDie(conn *gateway.Conn, player *model.Player, 
 		KillerID:   playerID,
 		KillerName: playerName,
 	})
+}
+
+// HandleAutoBattle 处理自动战斗开关请求
+func (h *CombatHandler) HandleAutoBattle(conn *gateway.Conn, body []byte) {
+	var req protocol.C2SAutoBattle
+	if err := json.Unmarshal(body, &req); err != nil {
+		conn.Send(protocol.MsgIDAutoBattleResp, &protocol.S2CAutoBattleResp{
+			Code: errors.ErrParamInvalid.Code,
+		})
+		return
+	}
+
+	player := onlinePlayer(h.world, conn)
+	if player == nil {
+		return
+	}
+
+	player.Mu().Lock()
+	player.AutoBattle = req.Enable
+	player.Mu().Unlock()
+
+	conn.Send(protocol.MsgIDAutoBattleResp, &protocol.S2CAutoBattleResp{
+		Code:   errors.ErrSuccess.Code,
+		Enable: req.Enable,
+	})
+
+	logger.TInfo(connCtx(conn), "自动战斗状态变更", "player_id", player.ID, "enable", req.Enable)
 }
 
 // lookupResource 在指定层的资源表中查找资源

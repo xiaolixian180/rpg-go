@@ -25,6 +25,10 @@ type World interface {
 	AddBoss(boss *model.Boss)
 	// RemoveBoss 从世界中移除Boss实例
 	RemoveBoss(bossID uint64)
+	// GetLayerBoss 获取指定层的Boss实例（如果存在）
+	GetLayerBoss(layer int32) *model.Boss
+	// SpawnBossIfNeeded 检查Boss层是否需要重新生成Boss，返回新生成的Boss（已存在则返回nil）
+	SpawnBossIfNeeded(layer int32) *model.Boss
 	// Hub 获取网关消息中心，用于广播和私聊
 	Hub() *gateway.Hub
 	// OnLogin 处理玩家登录（加载到内存）

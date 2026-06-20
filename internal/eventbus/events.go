@@ -2,9 +2,11 @@ package eventbus
 
 // Topic 常量，所有事件主题统一管理
 const (
-	TopicBossDie     = "boss.die"     // Boss被击杀
-	TopicPlayerDie   = "player.die"   // 玩家死亡（PvP/PvE）
-	TopicPlayerLogin = "player.login" // 玩家登录
+	TopicBossDie     = "boss.die"       // Boss被击杀
+	TopicPlayerDie   = "player.die"     // 玩家死亡（PvP/PvE）
+	TopicPlayerLogin = "player.login"   // 玩家登录
+	TopicLevelUp     = "player.levelup" // 玩家升级
+	TopicPvpKill     = "pvp.kill"       // PvP击杀
 )
 
 // BossDieEvent Boss被击杀事件
@@ -35,3 +37,19 @@ type PlayerLoginEvent struct {
 }
 
 func (e *PlayerLoginEvent) Topic() string { return TopicPlayerLogin }
+
+// LevelUpEvent 玩家升级事件
+type LevelUpEvent struct {
+	PlayerID uint64
+	NewLevel int32
+}
+
+func (e *LevelUpEvent) Topic() string { return TopicLevelUp }
+
+// PvpKillEvent PvP击杀事件
+type PvpKillEvent struct {
+	KillerID uint64
+	VictimID uint64
+}
+
+func (e *PvpKillEvent) Topic() string { return TopicPvpKill }

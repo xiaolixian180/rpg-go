@@ -10,6 +10,7 @@ import (
 	"hero-quest/internal/protocol"
 	"hero-quest/internal/service"
 	"hero-quest/internal/service/boss"
+	"hero-quest/internal/service/chat"
 	"hero-quest/internal/service/combat"
 	"hero-quest/internal/service/dungeon"
 	"hero-quest/internal/service/equip"
@@ -19,6 +20,7 @@ import (
 	"hero-quest/internal/service/rank"
 	"hero-quest/internal/service/shop"
 	"hero-quest/internal/service/skill"
+	"hero-quest/internal/service/team"
 	"hero-quest/internal/service/trade"
 	"hero-quest/pkg/auth"
 	"hero-quest/pkg/errors"
@@ -40,6 +42,9 @@ type Handler struct {
 	skill   *SkillHandler
 	rank    *RankHandler
 	attr    *AttrHandler
+	team    *TeamHandler
+	chat    *ChatHandler
+	useItem *UseItemHandler
 }
 
 // New 创建消息处理器管理器实例
@@ -56,23 +61,28 @@ func New(
 	tradeSvc trade.TradeService,
 	skillSvc skill.SkillService,
 	rankSvc rank.RankService,
+	teamSvc team.TeamService,
+	chatSvc chat.ChatService,
 	bus *eventbus.Bus,
 	jwtMgr *auth.JWTManager,
 ) *Handler {
 	return &Handler{
 		world:   world,
 		bus:     bus,
-		auth:    NewAuthHandler(world, playerSvc, jwtMgr),
+		auth:    NewAuthHandler(world, playerSvc, jwtMgr, bus),
 		dungeon: NewDungeonHandler(world, dungeonSvc),
 		combat:  NewCombatHandler(world, combatSvc, bossSvc, bus),
 		equip:   NewEquipHandler(world, equipSvc),
-		pvp:     NewPvpHandler(world, pvpSvc),
-		pet:     NewPetHandler(petSvc),
+		pvp:     NewPvpHandler(world, pvpSvc, bus),
+		pet:     NewPetHandler(world, petSvc),
 		shop:    NewShopHandler(world, shopSvc),
 		trade:   NewTradeHandler(world, tradeSvc),
 		skill:   NewSkillHandler(world, skillSvc),
 		rank:    NewRankHandler(rankSvc),
 		attr:    NewAttrHandler(world, playerSvc),
+		team:    NewTeamHandler(world, teamSvc),
+		chat:    NewChatHandler(world, chatSvc, teamSvc),
+		useItem: NewUseItemHandler(world),
 	}
 }
 
@@ -88,6 +98,7 @@ func (h *Handler) Register(router *gateway.Router) {
 	router.Register(protocol.MsgIDAttack, h.combat.HandleAttack)
 	router.Register(protocol.MsgIDSkillCast, h.combat.HandleSkillCast)
 	router.Register(protocol.MsgIDCollectResource, h.combat.HandleCollectResource)
+	router.Register(protocol.MsgIDAutoBattle, h.combat.HandleAutoBattle)
 
 	router.Register(protocol.MsgIDEquipStrengthen, h.equip.HandleStrengthen)
 	router.Register(protocol.MsgIDEquipEnchant, h.equip.HandleEnchant)
@@ -98,6 +109,7 @@ func (h *Handler) Register(router *gateway.Router) {
 	router.Register(protocol.MsgIDPvpAttack, h.pvp.HandlePvpAttack)
 	router.Register(protocol.MsgIDBountyHunt, h.pvp.HandleBountyHunt)
 	router.Register(protocol.MsgIDRevenge, h.pvp.HandleRevenge)
+	router.Register(protocol.MsgIDRedNameList, h.pvp.HandleRedNameList)
 
 	router.Register(protocol.MsgIDMove, h.dungeon.HandleMove)
 
@@ -107,6 +119,8 @@ func (h *Handler) Register(router *gateway.Router) {
 	router.Register(protocol.MsgIDPetEvolve, h.pet.HandleEvolve)
 	router.Register(protocol.MsgIDPetExplore, h.pet.HandleExplore)
 	router.Register(protocol.MsgIDPetCompose, h.pet.HandleCompose)
+	router.Register(protocol.MsgIDPetEquip, h.pet.HandlePetEquip)
+	router.Register(protocol.MsgIDPetUnequip, h.pet.HandlePetUnequip)
 
 	router.Register(protocol.MsgIDShopList, h.shop.HandleShopList)
 	router.Register(protocol.MsgIDShopBuy, h.shop.HandleShopBuy)
@@ -122,6 +136,19 @@ func (h *Handler) Register(router *gateway.Router) {
 	router.Register(protocol.MsgIDRankingList, h.rank.HandleRankingList)
 
 	router.Register(protocol.MsgIDAttrAssign, h.attr.HandleAttrAssign)
+
+	router.Register(protocol.MsgIDTeamCreate, h.team.HandleTeamCreate)
+	router.Register(protocol.MsgIDTeamInvite, h.team.HandleTeamInvite)
+	router.Register(protocol.MsgIDTeamInviteReply, h.team.HandleTeamInviteReply)
+	router.Register(protocol.MsgIDTeamLeave, h.team.HandleTeamLeave)
+	router.Register(protocol.MsgIDTeamDismiss, h.team.HandleTeamDismiss)
+	router.Register(protocol.MsgIDTeamKick, h.team.HandleTeamKick)
+	router.Register(protocol.MsgIDTeamQuery, h.team.HandleTeamQuery)
+
+	router.Register(protocol.MsgIDChatSend, h.chat.HandleChatSend)
+	router.Register(protocol.MsgIDChatHistory, h.chat.HandleChatHistory)
+
+	router.Register(protocol.MsgIDUseItem, h.useItem.HandleUseItem)
 }
 
 // onlinePlayer 获取内存中的在线玩家

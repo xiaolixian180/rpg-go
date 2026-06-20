@@ -16,6 +16,7 @@ type Boss struct {
 	Y        float64       // 地图中的Y坐标
 	Cooldown time.Duration // 技能公共冷却时间
 	Skills   []BossSkill   // Boss拥有的技能列表
+	Dead     bool          // 是否已被击杀（CAS标记，防止并发击杀重复发奖）
 	mu       sync.RWMutex  // 读写锁，保护并发访问
 }
 

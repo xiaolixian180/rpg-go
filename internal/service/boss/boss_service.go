@@ -111,9 +111,9 @@ func (s *bossService) OnDie(ctx context.Context, killer *model.Player, boss *mod
 		logger.TError(ctx, "设置Boss冷却时间失败", "layer", boss.Layer, "err", err)
 	}
 
-	// 5. 稀有掉落（紫色及以上品质）生成全服播报内容
+	// 5. 橙色掉落生成全服播报
 	for _, drop := range result.Drops {
-		if drop.Quality >= 4 {
+		if drop.Quality == 4 { // 仅橙装触发全服广播
 			result.Message = fmt.Sprintf("%s 击败了 %s，获得了 %s！", killerName, boss.Name, drop.Name)
 			break
 		}
@@ -147,9 +147,11 @@ func (s *bossService) calcBossDrops(boss *model.Boss) []model.DropItem {
 		quality = 4 // 橙
 	}
 
+	// 从真实装备模板中按品质随机选取
+	itemID, itemName := pickEquipByQuality(quality)
 	drops = append(drops, model.DropItem{
-		ItemID:  uint64(rand.Intn(1000) + 1),
-		Name:    fmt.Sprintf("Boss装备_%d", boss.Layer),
+		ItemID:  uint64(itemID),
+		Name:    itemName,
 		Quality: quality,
 		Count:   1,
 	})

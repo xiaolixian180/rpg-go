@@ -18,6 +18,8 @@ type PlayerRepo interface {
 	SavePlayer(ctx context.Context, p *model.Player) error
 	SaveMaxLayer(ctx context.Context, playerID uint64, maxLayer int32) error
 	CreatePlayer(ctx context.Context, id uint64, name string, class int32) (uint64, error)
+	// AddGold 原子地给玩家加金币（gold = gold + delta），用于离线卖家结算等场景
+	AddGold(ctx context.Context, playerID uint64, delta int64) error
 }
 
 // ==================== 装备数据访问接口 ====================

@@ -118,6 +118,38 @@ var (
 	ErrSkillMaxLevel        = New(904, "技能已满级") // 技能已达最大等级
 )
 
+// ==================== 组队模块 1000~1099 ====================
+
+var (
+	ErrTeamNotFound   = New(1000, "队伍不存在")   // 队伍ID无效或已解散
+	ErrNotTeamLeader  = New(1001, "不是队长")    // 仅队长可执行解散/踢人/邀请
+	ErrTeamFull       = New(1002, "队伍已满")    // 队伍人数已达上限
+	ErrAlreadyInTeam  = New(1003, "已在队伍中")   // 创建/加入时已身处队伍
+	ErrNotInTeam      = New(1004, "不在队伍中")   // 离开/查询时未加入任何队伍
+	ErrTargetInTeam   = New(1005, "对方已在队伍中") // 邀请的目标玩家已有队伍
+	ErrTeamInviteSelf = New(1006, "不能邀请自己")  // 邀请目标为自己
+	ErrNotTeamMember  = New(1007, "不是本队成员")  // 踢出非本队成员
+	ErrTeamInviteOff  = New(1008, "对方不在线")   // 邀请目标离线
+)
+
+// ==================== 聊天模块 1100~1199 ====================
+
+var (
+	ErrChatMsgEmpty       = New(1100, "消息内容为空") // 发送空消息
+	ErrChatMsgTooLong     = New(1101, "消息过长")   // 超过最大长度限制
+	ErrChatTargetOff      = New(1102, "对方不在线")  // 私聊目标离线
+	ErrChatNoTeam         = New(1103, "未加入队伍")  // 队伍频道但不在队伍
+	ErrChatChannelInvalid = New(1104, "频道不合法")  // 频道参数错误
+)
+
+// ==================== 物品模块 1200~1299 ====================
+
+var (
+	ErrItemInvalid  = New(1200, "物品无效") // 物品ID不存在
+	ErrItemNoStock  = New(1201, "物品不足") // 库存为0
+	ErrItemCooldown = New(1202, "冷却中")  // 物品使用冷却
+)
+
 // IsSuccess 判断错误码是否为成功
 func IsSuccess(code uint32) bool {
 	return code == 0

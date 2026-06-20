@@ -5,6 +5,8 @@ package combat
 import (
 	"context"
 	"math/rand"
+	"sync"
+	"time"
 
 	"hero-quest/internal/model"
 	"hero-quest/internal/service/iface"
@@ -40,6 +42,9 @@ type CombatResult struct {
 	IsCrit    bool   // 攻击是否暴击
 	LevelUped bool   // 攻击者是否升级
 	NewLevel  int32  // 升级后等级（未升级时为0）
+	PetDamage int64  // 宠物造成的伤害（0表示无宠物或宠物未攻击）
+	PetCrit   bool   // 宠物是否暴击
+	PetDead   bool   // 宠物是否在战斗中死亡
 }
 
 // SkillResult 技能释放结果，包含施法者、技能ID、受击目标列表
@@ -110,9 +115,17 @@ func (t *combatTarget) applyDamage(damage int64) (currHp int64, isDead bool) {
 	}
 	if t.isBoss {
 		t.boss.Mu().Lock()
+		// CAS：已被击杀的Boss不再受击，避免多个并发攻击者重复获得击杀奖励
+		if t.boss.Dead {
+			t.boss.Mu().Unlock()
+			return t.boss.Hp, false
+		}
 		t.boss.Hp -= damage
 		currHp = t.boss.Hp
 		isDead = t.boss.Hp <= 0
+		if isDead {
+			t.boss.Dead = true
+		}
 		t.boss.Mu().Unlock()
 	} else {
 		t.monster.Mu().Lock()
@@ -135,13 +148,37 @@ func (t *combatTarget) applyDamage(damage int64) (currHp int64, isDead bool) {
 
 // combatService 战斗服务实现
 type combatService struct {
-	world     iface.World          // 游戏世界状态（查找怪物/Boss）
-	playerSvc player.PlayerService // 玩家服务（用于升级）
+	world      iface.World          // 游戏世界状态（查找怪物/Boss）
+	playerSvc  player.PlayerService // 玩家服务（用于升级）
+	skillCDMap sync.Map             // 技能冷却：key=playerID → value=sync.Map{skillID→lastUseTime}
 }
 
 // NewCombatService 创建战斗服务实例
 func NewCombatService(world iface.World, playerSvc player.PlayerService) CombatService {
 	return &combatService{world: world, playerSvc: playerSvc}
+}
+
+// checkAndSetCooldown 检查技能冷却并设置冷却时间。返回true表示冷却中（不可使用）。
+func (s *combatService) checkAndSetCooldown(playerID uint64, skillID int32, cd float64) bool {
+	now := time.Now()
+	cdKey := skillID
+
+	// 获取玩家的冷却Map
+	playerCDRaw, _ := s.skillCDMap.LoadOrStore(playerID, &sync.Map{})
+	playerCD := playerCDRaw.(*sync.Map)
+
+	// 检查上次使用时间
+	if lastRaw, ok := playerCD.Load(cdKey); ok {
+		lastUse := lastRaw.(time.Time)
+		elapsed := now.Sub(lastUse).Seconds()
+		if elapsed < cd {
+			return true // 冷却中
+		}
+	}
+
+	// 设置本次使用时间
+	playerCD.Store(cdKey, now)
+	return false
 }
 
 // findTarget 在玩家当前层查找战斗目标（怪物或Boss），返回实体引用
@@ -231,6 +268,66 @@ func applyDefense(damage int64, def int64) int64 {
 	return result
 }
 
+// petAttack 宠物协同攻击逻辑：
+//  1. 检查玩家是否有出战宠物且宠物存活
+//  2. 计算宠物伤害（宠物攻击力 * 随机波动，含暴击判定）
+//  3. 对目标施加伤害
+//  4. 怪物反击：对宠物造成伤害，宠物HP<=0时标记死亡
+func petAttack(pet *model.Pet, target *combatTarget) (petDamage int64, petCrit bool, petDead bool) {
+	if pet == nil {
+		return 0, false, false
+	}
+
+	pet.Mu().RLock()
+	petHP := pet.HP
+	petAtk := pet.Attack
+	petDef := pet.Defense
+	pet.Mu().RUnlock()
+
+	// 宠物已死亡，无法攻击
+	if petHP <= 0 {
+		return 0, false, false
+	}
+
+	// 宠物伤害计算：基础攻击 + 随机波动(0~20%) + 暴击判定(10%)
+	damage := petAtk + rand.Int63n(petAtk/5+1)
+	petCrit = rand.Float64() < 0.10
+	if petCrit {
+		damage = int64(float64(damage) * 1.5)
+	}
+
+	// 防御减伤
+	def := target.targetDef()
+	damage = applyDefense(damage, def)
+	if damage < 1 {
+		damage = 1
+	}
+
+	// 对目标施加伤害
+	target.applyDamage(damage)
+	petDamage = damage
+
+	// 怪物反击：对宠物造成伤害（基于怪物攻击力的一小部分）
+	if !target.isBoss {
+		target.monster.Mu().RLock()
+		monsterAtk := target.monster.Atk
+		target.monster.Mu().RUnlock()
+		counterDamage := monsterAtk/4 - petDef/2
+		if counterDamage < 1 {
+			counterDamage = 1
+		}
+		pet.Mu().Lock()
+		pet.HP -= counterDamage
+		if pet.HP <= 0 {
+			pet.HP = 0
+			petDead = true
+		}
+		pet.Mu().Unlock()
+	}
+
+	return
+}
+
 // checkDodge 闪避判定（怪物无闪避，此处仅对怪物做随机闪避模拟）
 // 怪物闪避率很低（5%），Boss闪避率为0
 func checkDodge(target *combatTarget) bool {
@@ -241,17 +338,28 @@ func checkDodge(target *combatTarget) bool {
 	return rand.Float64() < 0.05
 }
 
-// rewardAttacker 给攻击者发放击杀奖励（经验和金币）
-func rewardAttacker(attacker *model.Player, target *combatTarget) (expGain, goldGain int64) {
-	expGain = target.expReward()
-	goldGain = target.goldReward()
+// calcReward 计算击杀奖励（经验和金币），不修改玩家状态
+func calcReward(target *combatTarget) (expGain, goldGain int64) {
+	return target.expReward(), target.goldReward()
+}
 
-	attacker.Mu().Lock()
-	attacker.Exp += expGain
-	attacker.Gold += goldGain
-	attacker.Mu().Unlock()
+// applyReward 给玩家发放击杀奖励：金币直接加到内存，经验通过 AddExp 处理（含持久化+缓存刷新+升级判定）
+func (s *combatService) applyReward(ctx context.Context, player *model.Player, expGain, goldGain int64) (levelUped bool, newLevel int32) {
+	// 金币加到内存（AddExp 的 SavePlayer 会连同金币一起持久化）
+	if goldGain > 0 {
+		player.Mu().Lock()
+		player.Gold += goldGain
+		player.Mu().Unlock()
+	}
 
-	return
+	// 经验通过 PlayerService.AddExp 统一处理：加经验 → 升级判定 → SavePlayer → refreshCache
+	if s.playerSvc != nil && expGain > 0 {
+		expResult, _ := s.playerSvc.AddExp(ctx, player, expGain)
+		if expResult != nil {
+			return expResult.LevelUped, expResult.NewLevel
+		}
+	}
+	return false, 0
 }
 
 // Attack 普通攻击业务逻辑：
@@ -302,9 +410,9 @@ func (s *combatService) Attack(ctx context.Context, attacker *model.Player, targ
 		return result, nil
 	}
 
-	// 计算伤害值（含技能倍率和暴击），预计算属性值
+	// 计算伤害值（普攻固定倍率1.0，技能走SkillCast流程并校验冷却）
 	attackerAttrs := readCombatAttrs(attacker)
-	rawDamage, isCrit := s.calcDamage(attackerAttrs, skillID)
+	rawDamage, isCrit := s.calcDamage(attackerAttrs, 0)
 	result.IsCrit = isCrit
 
 	// 防御减伤
@@ -317,20 +425,48 @@ func (s *combatService) Attack(ctx context.Context, attacker *model.Player, targ
 
 	// 目标死亡时计算奖励（包括Boss和普通怪物）
 	if result.IsDead {
-		result.ExpGain, result.GoldGain = rewardAttacker(attacker, target)
+		result.ExpGain, result.GoldGain = calcReward(target)
+		result.LevelUped, result.NewLevel = s.applyReward(ctx, attacker, result.ExpGain, result.GoldGain)
+	}
 
-		// 通过 PlayerService 统一处理升级逻辑
-		if s.playerSvc != nil {
-			expResult, _ := s.playerSvc.AddExp(ctx, attacker, result.ExpGain)
-			if expResult != nil {
-				result.LevelUped = expResult.LevelUped
-				result.NewLevel = expResult.NewLevel
+	// 宠物协同攻击（目标未死亡时宠物才出手）
+	if !result.IsDead {
+		attacker.Mu().RLock()
+		activePet := attacker.ActivePet
+		attacker.Mu().RUnlock()
+
+		if activePet != nil {
+			petDmg, petCrit, petDead := petAttack(activePet, target)
+			result.PetDamage = petDmg
+			result.PetCrit = petCrit
+			result.PetDead = petDead
+
+			// 如果宠物击杀了目标，也要计算奖励
+			if petDmg > 0 {
+				// 重新读取目标是否死亡（宠物可能补刀成功）
+				var targetDead bool
+				if target.isBoss {
+					target.boss.Mu().RLock()
+					targetDead = target.boss.Hp <= 0
+					target.boss.Mu().RUnlock()
+				} else {
+					target.monster.Mu().RLock()
+					targetDead = target.monster.Dead
+					target.monster.Mu().RUnlock()
+				}
+				if targetDead && !result.IsDead {
+					result.IsDead = true
+					result.CurrHp = 0
+					result.ExpGain, result.GoldGain = calcReward(target)
+					result.LevelUped, result.NewLevel = s.applyReward(ctx, attacker, result.ExpGain, result.GoldGain)
+				}
 			}
 		}
 	}
 
 	logger.TDebug(ctx, "玩家攻击", "attacker_id", attackerID, "target_id", targetID,
-		"damage", damage, "is_dead", result.IsDead, "is_crit", isCrit)
+		"damage", damage, "is_dead", result.IsDead, "is_crit", isCrit,
+		"pet_damage", result.PetDamage)
 	return result, nil
 }
 
@@ -367,6 +503,11 @@ func (s *combatService) SkillCast(ctx context.Context, caster *model.Player, ski
 	// 校验技能是否属于当前职业
 	if skillDef.Class != casterClass {
 		return nil, errors.ErrSkillNotFound
+	}
+
+	// 检查技能冷却
+	if skillDef.CD > 0 && s.checkAndSetCooldown(casterID, skillID, skillDef.CD) {
+		return nil, errors.ErrSkillCD
 	}
 
 	// 查找目标
@@ -421,15 +562,12 @@ func (s *combatService) SkillCast(ctx context.Context, caster *model.Player, ski
 
 	// 目标死亡时计算奖励（与 Attack 一致，包括Boss）
 	if isDead {
-		expGain, goldGain := rewardAttacker(caster, target)
-		// 奖励信息通过日志记录，不直接放入 SkillResult（SkillResult 是纯伤害结果）
+		expGain, goldGain := calcReward(target)
 		logger.TDebug(ctx, "技能击杀获得奖励", "caster_id", casterID, "target_id", targetID,
 			"exp", expGain, "gold", goldGain)
 
-		// 通过 PlayerService 统一处理升级逻辑（Issue 26: SkillCast triggers level-up）
-		if s.playerSvc != nil {
-			s.playerSvc.AddExp(ctx, caster, expGain)
-		}
+		// 通过 applyReward 统一处理奖励发放（金币+经验+持久化+缓存刷新+升级判定）
+		s.applyReward(ctx, caster, expGain, goldGain)
 	}
 
 	logger.TDebug(ctx, "玩家释放技能", "caster_id", casterID, "skill_id", skillID,

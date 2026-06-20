@@ -455,6 +455,7 @@ func (s *pvpService) Revenge(ctx context.Context, attacker *model.Player, target
 			goldGain = 0
 		}
 		attacker.Gold += goldGain
+		attacker.Honor += 5 // 复仇击杀获得少量荣誉
 		result.GoldGain = goldGain
 		result.HonorGain = 5 // 复仇击杀获得少量荣誉
 

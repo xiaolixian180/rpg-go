@@ -20,6 +20,7 @@ import (
 	"hero-quest/internal/scheduler"
 	"hero-quest/internal/service"
 	"hero-quest/internal/service/boss"
+	"hero-quest/internal/service/chat"
 	"hero-quest/internal/service/combat"
 	"hero-quest/internal/service/dungeon"
 	"hero-quest/internal/service/equip"
@@ -29,6 +30,7 @@ import (
 	"hero-quest/internal/service/rank"
 	"hero-quest/internal/service/shop"
 	"hero-quest/internal/service/skill"
+	"hero-quest/internal/service/team"
 	"hero-quest/internal/service/trade"
 	"hero-quest/pkg/auth"
 	"hero-quest/pkg/config"
@@ -100,14 +102,14 @@ func main() {
 
 	// Repos
 	playerRepo := repo.NewPlayerRepo(db)
-	mysqlEquipRepo := repo.NewEquipRepo(db)        // MySQL 原始实现，作为混合模式的底层
+	mysqlEquipRepo := repo.NewEquipRepo(db)                  // MySQL 原始实现，作为混合模式的底层
 	equipRepo := repo.NewMongoEquipRepo(mysqlEquipRepo, mdb) // 混合：MySQL 主记录 + MongoDB 附魔
-	petRepo := repo.NewMongoPetRepo(mdb)           // 纯 MongoDB
+	petRepo := repo.NewMongoPetRepo(mdb)                     // 纯 MongoDB
 	tradeRepo := repo.NewTradeRepo(db)
 	shopRepo := repo.NewShopRepo(db)
-	skillRepo := repo.NewMongoSkillRepo(mdb)       // 纯 MongoDB
+	skillRepo := repo.NewMongoSkillRepo(mdb) // 纯 MongoDB
 	cacheRepo := repo.NewCacheRepo(rdb)
-	invRepo := repo.NewMongoInventoryRepo(mdb)     // 纯 MongoDB
+	invRepo := repo.NewMongoInventoryRepo(mdb) // 纯 MongoDB
 
 	// Services（不依赖 World 的服务）
 	playerSvc := player.NewPlayerService(playerRepo, cacheRepo)
@@ -142,16 +144,20 @@ func main() {
 		BossDropOrange:    cfg.Game.BossDropOrange,
 		PageSize:          cfg.Game.PageSize,
 	}
-	gm := service.NewGameManager(playerSvc, playerRepo, gw.Hub(), gameCfg)
+	gm := service.NewGameManager(playerSvc, playerRepo, equipRepo, gw.Hub(), gameCfg)
 
 	// 依赖 GameConfig 的服务
 	bossSvc := boss.NewBossService(cacheRepo, playerRepo, gameCfg)
 	pvpSvc := pvp.NewPvpService(enforcer, gameCfg)
 
 	// 依赖 World 的服务（需在 GameManager 之后创建）
-	tradeSvc := trade.NewTradeService(tradeRepo, equipRepo, gm)
+	tradeSvc := trade.NewTradeService(tradeRepo, equipRepo, playerRepo, gm)
 	combatSvc := combat.NewCombatService(gm, playerSvc)
-	dungeonSvc := dungeon.NewDungeonService(enforcer, gm)
+	dungeonSvc := dungeon.NewDungeonService(enforcer, gm, playerRepo)
+
+	// 组队 / 聊天（无持久化，纯内存）
+	teamSvc := team.NewTeamService()
+	chatSvc := chat.NewChatService()
 
 	// 事件总线 — 解耦 Boss 死亡等跨模块事件
 	bus := eventbus.New()
@@ -163,6 +169,33 @@ func main() {
 		})
 	})
 
+	// 排行榜更新事件订阅
+	bus.Subscribe(eventbus.TopicPlayerLogin, func(e eventbus.Event) {
+		evt := e.(*eventbus.PlayerLoginEvent)
+		ctx := context.Background()
+		// 更新等级排行榜
+		rankSvc.UpdateRanking(ctx, evt.PlayerID, 0, int64(evt.Level))
+		// 更新战力排行榜（根据等级估算战力）
+		rankSvc.UpdateRanking(ctx, evt.PlayerID, 1, int64(evt.Level)*100)
+	})
+	bus.Subscribe(eventbus.TopicLevelUp, func(e eventbus.Event) {
+		evt := e.(*eventbus.LevelUpEvent)
+		ctx := context.Background()
+		rankSvc.UpdateRanking(ctx, evt.PlayerID, 0, int64(evt.NewLevel))
+		rankSvc.UpdateRanking(ctx, evt.PlayerID, 1, int64(evt.NewLevel)*100)
+	})
+	bus.Subscribe(eventbus.TopicPvpKill, func(e eventbus.Event) {
+		evt := e.(*eventbus.PvpKillEvent)
+		ctx := context.Background()
+		// 获取击杀者当前荣誉值更新排行榜
+		if p := gm.GetOnlinePlayer(evt.KillerID); p != nil {
+			p.Mu().RLock()
+			honor := int64(p.Honor)
+			p.Mu().RUnlock()
+			rankSvc.UpdateRanking(ctx, evt.KillerID, 2, honor)
+		}
+	})
+
 	// JWT 管理器：由登录/创建角色协议消息完成鉴权
 	jwtMgr := auth.NewJWTManager(cfg.JWT.Secret, cfg.JWT.ExpireHours)
 
@@ -171,6 +204,7 @@ func main() {
 		gm, // World 接口
 		playerSvc, dungeonSvc, combatSvc, bossSvc, equipSvc,
 		pvpSvc, petSvc, shopSvc, tradeSvc, skillSvc, rankSvc,
+		teamSvc, chatSvc,
 		bus,
 		jwtMgr,
 	)
@@ -179,14 +213,21 @@ func main() {
 
 	// 断线回调
 	gw.Hub().SetCloseHandler(func(conn *gateway.Conn) {
+		// 离线时自动从队伍中移除
+		teamSvc.Cleanup(conn.PlayerID)
 		gm.OnLogout(conn.PlayerID)
 	})
 
 	// 定时任务
 	sched := scheduler.New()
 	scheduler.RegisterMonsterRefreshTask(sched, gm)
+	// 资源不自动刷新（产品文档3.4：资源被采集后不会自动刷新）
+	// scheduler.RegisterResourceRefreshTask(sched, gm)
+	scheduler.RegisterBossRefreshTask(sched, gm)
 	scheduler.RegisterPetExploreTask(sched, gm, petRepo, playerRepo, invRepo)
 	scheduler.RegisterAutoSaveTask(sched, gm)
+	scheduler.RegisterAutoBattleTask(sched, gm, combatSvc, bus)
+	scheduler.RegisterMonsterAITask(sched, gm)
 
 	// 启动
 	go func() {

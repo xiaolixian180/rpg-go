@@ -30,7 +30,7 @@ func RegisterMonsterRefreshTask(s *Scheduler, world iface.World) {
 					m.Hp = m.MaxHp
 					m.Dead = false
 					refreshed = append(refreshed, protocol.MonsterData{
-						ID: m.ID, Name: m.Name, Hp: m.Hp, MaxHp: m.MaxHp, X: m.X, Y: m.Y,
+						ID: m.ID, Name: m.Name, Hp: m.Hp, MaxHp: m.MaxHp, X: m.X, Y: m.Y, Elite: m.Elite,
 					})
 				}
 				m.Mu().Unlock()

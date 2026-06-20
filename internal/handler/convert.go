@@ -25,6 +25,11 @@ func toPlayerData(p *model.Player) *protocol.PlayerData {
 		Con:        p.Con,
 		AttrPoints: p.AttrPoints,
 		MaxLayer:   p.MaxLayer,
+		Hp:         p.Hp,
+		MaxHp:      p.MaxHp,
+		Mp:         p.Mp,
+		MaxMp:      p.MaxMp,
+		Items:      p.Items,
 	}
 }
 

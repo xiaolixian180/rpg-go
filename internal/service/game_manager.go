@@ -23,6 +23,7 @@ import (
 type GameManager struct {
 	playerSvc  player.PlayerService // 玩家服务（用于登录加载数据、登出保存）
 	playerRepo repo.PlayerRepo      // 玩家数据仓库（用于定时存档）
+	equipRepo  repo.EquipRepo       // 装备数据仓库（用于登录加载装备）
 
 	// 内存状态 — 使用 sync.Map 针对读多写少场景优化，万人在线无锁竞争
 	players sync.Map // key: uint64 → *model.Player
@@ -42,12 +43,14 @@ type GameManager struct {
 func NewGameManager(
 	playerSvc player.PlayerService,
 	playerRepo repo.PlayerRepo,
+	equipRepo repo.EquipRepo,
 	hub *gateway.Hub,
 	cfg GameConfig,
 ) *GameManager {
 	gm := &GameManager{
 		playerSvc:  playerSvc,
 		playerRepo: playerRepo,
+		equipRepo:  equipRepo,
 		hub:        hub,
 		cfg:        cfg,
 		dungeons:   make(map[int32]*model.DungeonLayer),
@@ -56,17 +59,34 @@ func NewGameManager(
 	return gm
 }
 
-// initDungeons 初始化所有地下城层实例
+// initDungeons 初始化所有地下城层实例，并生成怪物和资源
 func (gm *GameManager) initDungeons() {
 	for i := int32(1); i <= gm.cfg.MaxLayer; i++ {
-		gm.dungeons[i] = &model.DungeonLayer{
+		layer := &model.DungeonLayer{
 			Layer:     i,
 			IsBoss:    model.IsBossLayer(i),
-			Monsters:  make(map[uint64]*model.Monster),
+			Monsters:  model.SpawnMonsters(i),
 			Players:   make(map[uint64]*model.Player),
-			Resources: make(map[uint64]*model.Resource),
+			Resources: model.SpawnResources(i),
 		}
+		gm.dungeons[i] = layer
 	}
+
+	// 为Boss层生成Boss实例
+	for i := int32(1); i <= gm.cfg.MaxLayer; i++ {
+		if !model.IsBossLayer(i) {
+			continue
+		}
+		tmpl := model.GetBossTemplate(i)
+		if tmpl == nil {
+			continue
+		}
+		boss := model.SpawnBoss(tmpl)
+		gm.bosses.Store(boss.ID, boss)
+		loggerPkg.Info("Boss已生成", "layer", i, "boss_id", boss.ID, "name", boss.Name)
+	}
+
+	loggerPkg.Info("地下城初始化完成", "layers", gm.cfg.MaxLayer)
 }
 
 // ==================== World 接口实现 ====================
@@ -117,6 +137,41 @@ func (gm *GameManager) RemoveBoss(bossID uint64) {
 	gm.bosses.Delete(bossID)
 }
 
+// GetLayerBoss 获取指定层的Boss实例（如果存在）
+func (gm *GameManager) GetLayerBoss(layer int32) *model.Boss {
+	var found *model.Boss
+	gm.bosses.Range(func(key, value any) bool {
+		b := value.(*model.Boss)
+		if b.Layer == layer {
+			found = b
+			return false
+		}
+		return true
+	})
+	return found
+}
+
+// SpawnBossIfNeeded 检查Boss层是否需要重新生成Boss。
+// 当Boss被击杀后从内存移除，冷却时间过后需要重新生成。
+// 返回新生成的Boss实例（如果已存在则返回nil）。
+func (gm *GameManager) SpawnBossIfNeeded(layer int32) *model.Boss {
+	if !model.IsBossLayer(layer) {
+		return nil
+	}
+	// 已有Boss则不重复生成
+	if gm.GetLayerBoss(layer) != nil {
+		return nil
+	}
+	tmpl := model.GetBossTemplate(layer)
+	if tmpl == nil {
+		return nil
+	}
+	boss := model.SpawnBoss(tmpl)
+	gm.bosses.Store(boss.ID, boss)
+	loggerPkg.Info("Boss重新生成", "layer", layer, "boss_id", boss.ID, "name", boss.Name)
+	return boss
+}
+
 // Hub 获取网关消息中心
 func (gm *GameManager) Hub() *gateway.Hub {
 	return gm.hub
@@ -151,6 +206,26 @@ func (gm *GameManager) OnLogin(playerID uint64) (*model.Player, error) {
 	if gameErr != nil {
 		return nil, fmt.Errorf("player login: %s", gameErr.Error())
 	}
+
+	// 加载装备数据到内存
+	if gm.equipRepo != nil {
+		equips, err := gm.equipRepo.GetAllEquips(ctx, playerID)
+		if err == nil {
+			p.Mu().Lock()
+			for _, eq := range equips {
+				if eq.Slot >= 0 && int(eq.Slot) < len(p.EquippedItems) {
+					p.EquippedItems[eq.Slot] = eq
+				}
+			}
+			// 重新计算MaxHp（包含装备加成）
+			p.MaxHp = p.CalcMaxHp()
+			p.Hp = p.MaxHp
+			p.Mu().Unlock()
+		}
+	}
+
+	// 初始化物品背包和MP（DB不存，每次登录重算）
+	p.InitItems()
 
 	gm.players.Store(playerID, p)
 	return p, nil

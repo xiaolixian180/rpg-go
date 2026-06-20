@@ -31,20 +31,25 @@ type S2CCreatePlayerResp struct {
 
 // PlayerData 玩家完整数据，登录成功后下发
 type PlayerData struct {
-	ID         uint64 `json:"id"`          // 玩家唯一ID
-	Name       string `json:"name"`        // 角色名称
-	Class      int32  `json:"class"`       // 职业
-	Level      int32  `json:"level"`       // 等级（上限60）
-	Exp        int64  `json:"exp"`         // 当前经验值
-	Gold       int64  `json:"gold"`        // 金币
-	Honor      int32  `json:"honor"`       // 荣誉值（PvP获得）
-	KillValue  int32  `json:"kill_value"`  // 杀戮值（杀白名玩家增加）
-	Str        int32  `json:"str"`         // 力量属性
-	Agi        int32  `json:"agi"`         // 敏捷属性
-	Int        int32  `json:"int"`         // 智力属性
-	Con        int32  `json:"con"`         // 体质属性
-	AttrPoints int32  `json:"attr_points"` // 未分配属性点
-	MaxLayer   int32  `json:"max_layer"`   // 最高通关层数
+	ID         uint64           `json:"id"`          // 玩家唯一ID
+	Name       string           `json:"name"`        // 角色名称
+	Class      int32            `json:"class"`       // 职业
+	Level      int32            `json:"level"`       // 等级（上限60）
+	Exp        int64            `json:"exp"`         // 当前经验值
+	Gold       int64            `json:"gold"`        // 金币
+	Honor      int32            `json:"honor"`       // 荣誉值（PvP获得）
+	KillValue  int32            `json:"kill_value"`  // 杀戮值（杀白名玩家增加）
+	Str        int32            `json:"str"`         // 力量属性
+	Agi        int32            `json:"agi"`         // 敏捷属性
+	Int        int32            `json:"int"`         // 智力属性
+	Con        int32            `json:"con"`         // 体质属性
+	AttrPoints int32            `json:"attr_points"` // 未分配属性点
+	MaxLayer   int32            `json:"max_layer"`   // 最高通关层数
+	Hp         int64            `json:"hp"`          // 当前生命值
+	MaxHp      int64            `json:"max_hp"`      // 生命值上限
+	Mp         int64            `json:"mp"`          // 当前魔法值
+	MaxMp      int64            `json:"max_mp"`      // 魔法值上限
+	Items      map[uint32]int32 `json:"items"`       // 背包物品（item_id -> 数量）
 }
 
 // ==================== 地下城 ====================
@@ -101,6 +106,7 @@ type MonsterData struct {
 	MaxHp int64   `json:"max_hp"` // 最大血量
 	X     float64 `json:"x"`      // X坐标
 	Y     float64 `json:"y"`      // Y坐标
+	Elite bool    `json:"elite"`  // 是否为精英怪
 }
 
 // PlayerBrief 场景内其他玩家简要信息
@@ -136,10 +142,17 @@ type C2SAttack struct {
 
 // S2CDamage 服务端伤害结算结果
 type S2CDamage struct {
-	TargetID uint64 `json:"target_id"` // 目标ID
-	Damage   int64  `json:"damage"`    // 伤害值
-	CurrHp   int64  `json:"curr_hp"`   // 目标当前血量
-	IsDead   bool   `json:"is_dead"`   // 目标是否死亡
+	TargetID  uint64 `json:"target_id"`  // 目标ID
+	Damage    int64  `json:"damage"`     // 伤害值
+	CurrHp    int64  `json:"curr_hp"`    // 目标当前血量
+	IsDead    bool   `json:"is_dead"`    // 目标是否死亡
+	ExpGain   int64  `json:"exp_gain"`   // 获得经验（击杀时）
+	GoldGain  int64  `json:"gold_gain"`  // 获得金币（击杀时）
+	LevelUp   bool   `json:"level_up"`   // 攻击者是否升级
+	NewLevel  int32  `json:"new_level"`  // 升级后等级
+	PetDamage int64  `json:"pet_damage"` // 宠物造成的伤害（0=无宠物）
+	PetCrit   bool   `json:"pet_crit"`   // 宠物是否暴击
+	PetDead   bool   `json:"pet_dead"`   // 宠物是否死亡
 }
 
 // C2SSkillCast 客户端技能释放请求
@@ -169,8 +182,9 @@ type DamageInfo struct {
 
 // S2CPlayerDie 服务端通知玩家死亡
 type S2CPlayerDie struct {
-	PlayerID uint64 `json:"player_id"` // 死亡玩家ID
-	KillerID uint64 `json:"killer_id"` // 击杀者ID
+	PlayerID   uint64 `json:"player_id"`   // 死亡玩家ID
+	KillerID   uint64 `json:"killer_id"`   // 击杀者ID
+	KillerName string `json:"killer_name"` // 击杀者名称
 }
 
 // S2CPlayerRevive 服务端通知玩家复活
@@ -193,6 +207,40 @@ type S2CCollectResult struct {
 	ItemID     uint64 `json:"item_id"`     // 获得的物品ID
 	ItemName   string `json:"item_name"`   // 物品名称
 	Count      int32  `json:"count"`       // 物品数量
+}
+
+// ==================== 自动战斗 ====================
+
+// C2SAutoBattle 客户端开启/关闭自动战斗请求
+type C2SAutoBattle struct {
+	Enable bool `json:"enable"` // true=开启 false=关闭
+}
+
+// S2CAutoBattleResp 服务端自动战斗状态响应
+type S2CAutoBattleResp struct {
+	Code   uint32 `json:"code"`   // 错误码
+	Enable bool   `json:"enable"` // 当前自动战斗状态
+}
+
+// C2SUseItem 客户端使用消耗品请求
+type C2SUseItem struct {
+	ItemId uint32 `json:"item_id"` // 物品ID
+}
+
+// S2CUseItemResp 服务端使用消耗品结果
+type S2CUseItemResp struct {
+	Code   uint32 `json:"code"`    // 错误码
+	ItemId uint32 `json:"item_id"` // 物品ID
+	Count  int32  `json:"count"`   // 剩余数量
+	Hp     int64  `json:"hp"`      // 当前HP
+	MaxHp  int64  `json:"max_hp"`  // HP上限
+	Mp     int64  `json:"mp"`      // 当前MP
+	MaxMp  int64  `json:"max_mp"`  // MP上限
+}
+
+// S2CInventorySync 服务端库存同步推送
+type S2CInventorySync struct {
+	Items map[uint32]int32 `json:"items"` // item_id -> 数量
 }
 
 // ==================== Boss ====================
@@ -450,6 +498,33 @@ type S2CPetComposeResp struct {
 	Quality  int32  `json:"quality"`   // 新品质
 }
 
+// C2SPetEquip 客户端宠物穿戴装备请求
+type C2SPetEquip struct {
+	PetUID  uint64 `json:"pet_uid"`  // 宠物实例ID
+	Slot    int32  `json:"slot"`     // 装备槽位（0=项圈 1=护甲 2=饰品）
+	EquipID int32  `json:"equip_id"` // 宠物装备模板ID
+}
+
+// S2CPetEquipResp 服务端宠物穿戴装备结果
+type S2CPetEquipResp struct {
+	Code   uint32 `json:"code"`    // 0=成功
+	PetUID uint64 `json:"pet_uid"` // 宠物实例ID
+	Slot   int32  `json:"slot"`    // 装备槽位
+}
+
+// C2SPetUnequip 客户端宠物卸下装备请求
+type C2SPetUnequip struct {
+	PetUID uint64 `json:"pet_uid"` // 宠物实例ID
+	Slot   int32  `json:"slot"`    // 装备槽位
+}
+
+// S2CPetUnequipResp 服务端宠物卸下装备结果
+type S2CPetUnequipResp struct {
+	Code   uint32 `json:"code"`    // 0=成功
+	PetUID uint64 `json:"pet_uid"` // 宠物实例ID
+	Slot   int32  `json:"slot"`    // 装备槽位
+}
+
 // PetData 宠物完整数据
 type PetData struct {
 	UID     uint64 `json:"uid"`     // 宠物唯一实例ID
@@ -641,4 +716,154 @@ type S2CHeartbeat struct {
 // S2CKick 服务端踢下线通知
 type S2CKick struct {
 	Reason string `json:"reason"` // 被踢原因
+}
+
+// ==================== 组队模块 DTO ====================
+
+// TeamMember 队员信息
+type TeamMember struct {
+	PlayerID uint64 `json:"player_id"` // 玩家ID
+	Name     string `json:"name"`      // 玩家名称
+	Class    int32  `json:"class"`     // 职业
+	Level    int32  `json:"level"`     // 等级
+	Hp       int64  `json:"hp"`        // 当前血量
+	MaxHp    int64  `json:"max_hp"`    // 最大血量
+	IsLeader bool   `json:"is_leader"` // 是否队长
+	Online   bool   `json:"online"`    // 是否在线
+	Layer    int32  `json:"layer"`     // 所在层（0=不在地下城）
+}
+
+// TeamInfo 队伍信息
+type TeamInfo struct {
+	TeamID      uint64       `json:"team_id"`      // 队伍唯一ID
+	LeaderID    uint64       `json:"leader_id"`    // 队长ID
+	MemberCount int32        `json:"member_count"` // 当前队员数
+	Members     []TeamMember `json:"members"`      // 队员列表
+}
+
+// C2STeamCreate 创建队伍请求
+type C2STeamCreate struct {
+	// 无字段，由服务端自动创建以申请人为队长的队伍
+}
+
+// S2CTeamInfoResp 队伍信息响应（用于创建/查询响应）
+type S2CTeamInfoResp struct {
+	Code uint32   `json:"code"` // 错误码，0表示成功
+	Team TeamInfo `json:"team"` // 队伍信息（无队伍时为空）
+}
+
+// C2STeamInvite 邀请玩家入队
+type C2STeamInvite struct {
+	TargetID uint64 `json:"target_id"` // 被邀请玩家ID
+}
+
+// S2CTeamInvitePush 被邀请通知（推送给被邀请方）
+type S2CTeamInvitePush struct {
+	TeamID      uint64 `json:"team_id"`      // 队伍ID
+	InviterID   uint64 `json:"inviter_id"`   // 邀请者ID
+	InviterName string `json:"inviter_name"` // 邀请者名称
+	MemberCount int32  `json:"member_count"` // 当前队员数
+}
+
+// C2STeamInviteReply 邀请回复
+type C2STeamInviteReply struct {
+	TeamID uint64 `json:"team_id"` // 队伍ID
+	Accept bool   `json:"accept"`  // true=接受，false=拒绝
+}
+
+// S2CTeamInviteResult 邀请结果（推送给邀请者）
+type S2CTeamInviteResult struct {
+	Code       uint32 `json:"code"`        // 错误码，0=对方接受，700=对方拒绝，其他=失败
+	TargetID   uint64 `json:"target_id"`   // 被邀请玩家ID
+	TargetName string `json:"target_name"` // 被邀请玩家名称
+	Accept     bool   `json:"accept"`      // 对方是否接受
+}
+
+// C2STeamLeave 离开队伍
+type C2STeamLeave struct{}
+
+// S2CTeamLeaveResp 离开队伍结果
+type S2CTeamLeaveResp struct {
+	Code   uint32 `json:"code"`    // 错误码
+	TeamID uint64 `json:"team_id"` // 离开的队伍ID
+}
+
+// C2STeamDismiss 解散队伍（仅队长）
+type C2STeamDismiss struct{}
+
+// S2CTeamDismissResp 解散队伍结果
+type S2CTeamDismissResp struct {
+	Code   uint32 `json:"code"`    // 错误码
+	TeamID uint64 `json:"team_id"` // 解散的队伍ID
+}
+
+// C2STeamKick 踢出队员
+type C2STeamKick struct {
+	TargetID uint64 `json:"target_id"` // 被踢玩家ID
+}
+
+// S2CTeamKickResp 踢出队员结果
+type S2CTeamKickResp struct {
+	Code     uint32 `json:"code"`      // 错误码
+	TargetID uint64 `json:"target_id"` // 被踢玩家ID
+}
+
+// C2STeamQuery 查询我的队伍
+type C2STeamQuery struct{}
+
+// S2CTeamUpdate 队伍状态变更推送（全员）
+// Action: 1=成员加入 2=成员离开 3=队伍解散 4=成员被踢 5=队员状态变更(血量/位置/上下线)
+type S2CTeamUpdate struct {
+	Action   uint32       `json:"action"`    // 变更类型
+	TeamID   uint64       `json:"team_id"`   // 队伍ID
+	LeaderID uint64       `json:"leader_id"` // 当前队长ID
+	Members  []TeamMember `json:"members"`   // 当前队员快照
+	Reason   string       `json:"reason"`    // 变更说明（如"XX 离开了队伍"）
+}
+
+// ==================== 聊天模块 DTO ====================
+
+// 聊天频道常量
+const (
+	ChatChannelWorld   int32 = 1 // 世界频道
+	ChatChannelPrivate int32 = 2 // 私聊
+	ChatChannelTeam    int32 = 3 // 队伍频道
+)
+
+// C2SChatSend 发送聊天消息
+type C2SChatSend struct {
+	Channel  int32  `json:"channel"`   // 频道：1=世界 2=私聊 3=队伍
+	TargetID uint64 `json:"target_id"` // 私聊目标ID（仅 channel=2 时使用）
+	Content  string `json:"content"`   // 消息内容
+}
+
+// S2CChatSendResp 发送结果
+type S2CChatSendResp struct {
+	Code      uint32 `json:"code"`      // 错误码，0=成功
+	Channel   int32  `json:"channel"`   // 频道
+	TargetID  uint64 `json:"target_id"` // 私聊目标
+	Timestamp int64  `json:"timestamp"` // 服务端时间戳（毫秒）
+}
+
+// S2CChatMessage 聊天消息推送
+type S2CChatMessage struct {
+	Channel    int32  `json:"channel"`     // 频道
+	SenderID   uint64 `json:"sender_id"`   // 发送者ID
+	SenderName string `json:"sender_name"` // 发送者名称
+	TargetID   uint64 `json:"target_id"`   // 私聊接收方ID（仅私聊）
+	Content    string `json:"content"`     // 内容
+	Timestamp  int64  `json:"timestamp"`   // 时间戳（毫秒）
+}
+
+// C2SChatHistory 查询历史消息
+type C2SChatHistory struct {
+	Channel int32 `json:"channel"` // 频道（仅支持世界频道历史）
+	Count   int32 `json:"count"`   // 拉取条数（最多50）
+}
+
+// S2CChatHistoryResp 历史消息响应
+type S2CChatHistoryResp struct {
+	Code     uint32           `json:"code"`     // 错误码
+	Channel  int32            `json:"channel"`  // 频道
+	Messages []S2CChatMessage `json:"messages"` // 历史消息（按时间升序）
 }

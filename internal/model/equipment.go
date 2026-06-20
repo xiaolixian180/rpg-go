@@ -62,15 +62,15 @@ type EquipTemplate struct {
 // EquipTemplates 装备模板静态数据表
 var EquipTemplates = map[int32]*EquipTemplate{
 	// 武器 (Slot 0)
-	1: {ID: 1, Name: "新手木剑", Slot: SlotWeapon, Quality: QualityWhite, BaseAtk: 5, BaseDef: 0, BaseHp: 0, RequireLevel: 1},
+	1: {ID: 1, Name: "木剑", Slot: SlotWeapon, Quality: QualityWhite, BaseAtk: 5, BaseDef: 0, BaseHp: 0, RequireLevel: 1},
 	2: {ID: 2, Name: "铁剑", Slot: SlotWeapon, Quality: QualityWhite, BaseAtk: 12, BaseDef: 0, BaseHp: 0, RequireLevel: 5},
 	3: {ID: 3, Name: "精钢长剑", Slot: SlotWeapon, Quality: QualityGreen, BaseAtk: 25, BaseDef: 2, BaseHp: 0, RequireLevel: 10},
 	4: {ID: 4, Name: "暗影之刃", Slot: SlotWeapon, Quality: QualityBlue, BaseAtk: 45, BaseDef: 5, BaseHp: 0, RequireLevel: 20},
-	5: {ID: 5, Name: "龙牙巨剑", Slot: SlotWeapon, Quality: QualityPurple, BaseAtk: 80, BaseDef: 10, BaseHp: 50, RequireLevel: 30},
+	5: {ID: 5, Name: "龙牙剑", Slot: SlotWeapon, Quality: QualityPurple, BaseAtk: 80, BaseDef: 10, BaseHp: 50, RequireLevel: 30},
 	6: {ID: 6, Name: "天罚圣剑", Slot: SlotWeapon, Quality: QualityOrange, BaseAtk: 130, BaseDef: 15, BaseHp: 100, RequireLevel: 45},
 	// 头盔 (Slot 1)
 	10: {ID: 10, Name: "布帽", Slot: SlotHelmet, Quality: QualityWhite, BaseAtk: 0, BaseDef: 3, BaseHp: 10, RequireLevel: 1},
-	11: {ID: 11, Name: "铁盔", Slot: SlotHelmet, Quality: QualityWhite, BaseAtk: 0, BaseDef: 8, BaseHp: 30, RequireLevel: 5},
+	11: {ID: 11, Name: "铁头盔", Slot: SlotHelmet, Quality: QualityWhite, BaseAtk: 0, BaseDef: 8, BaseHp: 30, RequireLevel: 5},
 	12: {ID: 12, Name: "秘银头盔", Slot: SlotHelmet, Quality: QualityGreen, BaseAtk: 0, BaseDef: 18, BaseHp: 60, RequireLevel: 10},
 	13: {ID: 13, Name: "暗夜兜帽", Slot: SlotHelmet, Quality: QualityBlue, BaseAtk: 5, BaseDef: 30, BaseHp: 100, RequireLevel: 20},
 	14: {ID: 14, Name: "战神之冠", Slot: SlotHelmet, Quality: QualityPurple, BaseAtk: 10, BaseDef: 50, BaseHp: 180, RequireLevel: 30},
@@ -78,7 +78,7 @@ var EquipTemplates = map[int32]*EquipTemplate{
 	20: {ID: 20, Name: "布衣", Slot: SlotArmor, Quality: QualityWhite, BaseAtk: 0, BaseDef: 5, BaseHp: 20, RequireLevel: 1},
 	21: {ID: 21, Name: "铁甲", Slot: SlotArmor, Quality: QualityWhite, BaseAtk: 0, BaseDef: 15, BaseHp: 50, RequireLevel: 5},
 	22: {ID: 22, Name: "精钢战甲", Slot: SlotArmor, Quality: QualityGreen, BaseAtk: 0, BaseDef: 30, BaseHp: 100, RequireLevel: 10},
-	23: {ID: 23, Name: "暗影战甲", Slot: SlotArmor, Quality: QualityBlue, BaseAtk: 5, BaseDef: 55, BaseHp: 180, RequireLevel: 20},
+	23: {ID: 23, Name: "暗影铠甲", Slot: SlotArmor, Quality: QualityBlue, BaseAtk: 5, BaseDef: 55, BaseHp: 180, RequireLevel: 20},
 	24: {ID: 24, Name: "龙鳞铠甲", Slot: SlotArmor, Quality: QualityPurple, BaseAtk: 10, BaseDef: 90, BaseHp: 300, RequireLevel: 30},
 	// 手套 (Slot 3)
 	30: {ID: 30, Name: "布手套", Slot: SlotGloves, Quality: QualityWhite, BaseAtk: 2, BaseDef: 2, BaseHp: 0, RequireLevel: 1},

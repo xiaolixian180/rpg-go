@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"hero-quest/internal/gateway"
+	"hero-quest/internal/model"
 	"hero-quest/internal/protocol"
 	"hero-quest/internal/service"
 	"hero-quest/internal/service/equip"
@@ -52,7 +53,17 @@ func (h *EquipHandler) HandleStrengthen(conn *gateway.Conn, body []byte) {
 		return
 	}
 
-	// 强化完成，发送强化结果
+	// 强化完成，同步内存状态
+	if sr.IsSuccess {
+		p.Mu().Lock()
+		if p.EquippedItems[req.Slot] != nil {
+			p.EquippedItems[req.Slot].StrengthenLevel = sr.NewLevel
+		}
+		p.MaxHp = p.CalcMaxHp()
+		p.Hp = p.MaxHp
+		p.Mu().Unlock()
+	}
+
 	conn.Send(protocol.MsgIDEquipStrengthenResp, &protocol.S2CEquipStrengthenResp{
 		Code:      errors.ErrSuccess.Code,
 		Slot:      sr.Slot,
@@ -85,7 +96,18 @@ func (h *EquipHandler) HandleEnchant(conn *gateway.Conn, body []byte) {
 		return
 	}
 
-	// 附魔成功，发送附魔结果
+	// 附魔成功，同步内存状态
+	p := h.world.GetOnlinePlayer(conn.PlayerID)
+	if p != nil {
+		p.Mu().Lock()
+		if p.EquippedItems[req.Slot] != nil {
+			enchantData := map[string]int32{er.AttrName: er.AttrVal}
+			enchantJSON, _ := json.Marshal(enchantData)
+			p.EquippedItems[req.Slot].EnchantAttr = string(enchantJSON)
+		}
+		p.Mu().Unlock()
+	}
+
 	conn.Send(protocol.MsgIDEquipEnchantResp, &protocol.S2CEquipEnchantResp{
 		Code:     errors.ErrSuccess.Code,
 		Slot:     er.Slot,
@@ -124,7 +146,18 @@ func (h *EquipHandler) HandleWear(conn *gateway.Conn, body []byte) {
 		return
 	}
 
-	// 穿戴成功
+	// 穿戴成功，同步内存状态
+	p.Mu().Lock()
+	p.EquippedItems[req.Slot] = &model.Equipment{
+		PlayerID: p.ID,
+		Slot:     req.Slot,
+		EquipID:  int32(req.EquipID),
+		Quality:  model.EquipTemplates[int32(req.EquipID)].Quality,
+	}
+	p.MaxHp = p.CalcMaxHp()
+	p.Hp = p.MaxHp
+	p.Mu().Unlock()
+
 	conn.Send(protocol.MsgIDEquipWearResp, &protocol.S2CEquipWearResp{
 		Code: errors.ErrSuccess.Code,
 		Slot: req.Slot,
@@ -147,6 +180,9 @@ func (h *EquipHandler) HandleUnload(conn *gateway.Conn, body []byte) {
 		return
 	}
 
+	// 获取在线玩家实例（用于同步内存状态）
+	p := h.world.GetOnlinePlayer(conn.PlayerID)
+
 	// 调用装备服务执行卸下逻辑
 	ge := h.equipSvc.Unload(connCtx(conn), conn.PlayerID, req.Slot)
 	if ge != nil {
@@ -154,7 +190,17 @@ func (h *EquipHandler) HandleUnload(conn *gateway.Conn, body []byte) {
 		return
 	}
 
-	// 卸下成功
+	// 卸下成功，同步内存状态
+	if p != nil {
+		p.Mu().Lock()
+		p.EquippedItems[req.Slot] = nil
+		p.MaxHp = p.CalcMaxHp()
+		if p.Hp > p.MaxHp {
+			p.Hp = p.MaxHp
+		}
+		p.Mu().Unlock()
+	}
+
 	conn.Send(protocol.MsgIDEquipUnloadResp, &protocol.S2CEquipUnloadResp{
 		Code: errors.ErrSuccess.Code,
 		Slot: req.Slot,

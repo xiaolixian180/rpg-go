@@ -58,6 +58,9 @@ func (m *mockPlayerRepo) SaveMaxLayer(ctx context.Context, playerID uint64, maxL
 func (m *mockPlayerRepo) CreatePlayer(ctx context.Context, id uint64, name string, class int32) (uint64, error) {
 	return id, nil
 }
+func (m *mockPlayerRepo) AddGold(ctx context.Context, playerID uint64, delta int64) error {
+	return nil
+}
 
 // ==================== GetRanking 测试 ====================
 

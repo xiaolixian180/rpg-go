@@ -48,17 +48,19 @@ type TradeBuyResult struct {
 
 // tradeService 交易行服务实现
 type tradeService struct {
-	tradeRepo repo.TradeRepo // 交易行数据访问接口
-	equipRepo repo.EquipRepo // 装备数据访问接口（上架时查询装备信息）
-	world     iface.World    // 游戏世界（查找在线卖家并打款）
+	tradeRepo  repo.TradeRepo  // 交易行数据访问接口
+	equipRepo  repo.EquipRepo  // 装备数据访问接口（上架时查询装备信息）
+	playerRepo repo.PlayerRepo // 玩家数据访问接口（离线卖家金币结算）
+	world      iface.World     // 游戏世界（查找在线卖家并打款）
 }
 
 // NewTradeService 创建交易行服务实例
-func NewTradeService(tradeRepo repo.TradeRepo, equipRepo repo.EquipRepo, world iface.World) TradeService {
+func NewTradeService(tradeRepo repo.TradeRepo, equipRepo repo.EquipRepo, playerRepo repo.PlayerRepo, world iface.World) TradeService {
 	return &tradeService{
-		tradeRepo: tradeRepo,
-		equipRepo: equipRepo,
-		world:     world,
+		tradeRepo:  tradeRepo,
+		equipRepo:  equipRepo,
+		playerRepo: playerRepo,
+		world:      world,
 	}
 }
 
@@ -140,6 +142,27 @@ func (s *tradeService) Publish(ctx context.Context, playerID uint64, slot int32,
 		return nil, errors.ErrInternal
 	}
 
+	// 从卖家装备槽位移除装备（防止物品复制：上架后卖家仍穿戴会导致买家+卖家双份）
+	if delErr := s.equipRepo.DeleteEquip(ctx, playerID, slot); delErr != nil {
+		logger.TError(ctx, "上架后移除装备槽位失败，回滚订单", "player_id", playerID, "slot", slot, "err", delErr)
+		// 回滚：取消刚刚创建的订单
+		if _, cancelErr := s.tradeRepo.CancelOrder(ctx, orderID, playerID); cancelErr != nil {
+			logger.TError(ctx, "回滚交易订单失败", "order_id", orderID, "err", cancelErr)
+		}
+		return nil, errors.ErrInternal
+	}
+
+	// 若玩家在线，同步清除内存中的装备槽位
+	if s.world != nil {
+		if onlinePlayer := s.world.GetOnlinePlayer(playerID); onlinePlayer != nil {
+			onlinePlayer.Mu().Lock()
+			if int(slot) < len(onlinePlayer.EquippedItems) {
+				onlinePlayer.EquippedItems[slot] = nil
+			}
+			onlinePlayer.Mu().Unlock()
+		}
+	}
+
 	result := &TradePublishResult{
 		OrderID: orderID,
 	}
@@ -209,8 +232,12 @@ func (s *tradeService) Buy(ctx context.Context, buyer *model.Player, orderID uin
 			seller.Mu().Lock()
 			seller.Gold += order.Price
 			seller.Mu().Unlock()
+		} else if s.playerRepo != nil {
+			// 卖家离线时，直接原子加金币到数据库，避免漏发收益
+			if err := s.playerRepo.AddGold(ctx, order.SellerID, order.Price); err != nil {
+				logger.TError(ctx, "离线卖家金币结算失败", "seller_id", order.SellerID, "price", order.Price, "err", err)
+			}
 		}
-		// 卖家离线时，金币通过 tradeRepo 的订单记录结算，下次登录时处理
 	}
 
 	logger.TInfo(ctx, "购买交易行商品", "buyer_id", buyer.ID, "seller_id", order.SellerID,

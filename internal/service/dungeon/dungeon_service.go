@@ -8,6 +8,7 @@ import (
 
 	"hero-quest/internal/model"
 	"hero-quest/internal/rbac"
+	"hero-quest/internal/repo"
 	"hero-quest/internal/service/iface"
 	"hero-quest/pkg/errors"
 	"hero-quest/pkg/logger"
@@ -43,15 +44,16 @@ type DungeonInfoResult struct {
 
 // dungeonService 地下城服务实现
 type dungeonService struct {
-	enforcer *rbac.Enforcer // Casbin 权限执行器，用于校验玩家进入权限
-	world    iface.World    // 游戏世界（获取地下城实例和配置）
+	enforcer   *rbac.Enforcer  // Casbin 权限执行器，用于校验玩家进入权限
+	world      iface.World     // 游戏世界（获取地下城实例和配置）
+	playerRepo repo.PlayerRepo // 玩家数据访问（持久化通关进度）
 }
 
 // NewDungeonService 创建地下城服务实例
 // enforcer: Casbin 权限执行器，传入 nil 则跳过权限校验
 // world: 游戏世界接口，用于获取地下城实例和配置参数
-func NewDungeonService(enforcer *rbac.Enforcer, world iface.World) DungeonService {
-	return &dungeonService{enforcer: enforcer, world: world}
+func NewDungeonService(enforcer *rbac.Enforcer, world iface.World, playerRepo repo.PlayerRepo) DungeonService {
+	return &dungeonService{enforcer: enforcer, world: world, playerRepo: playerRepo}
 }
 
 // Enter 进入地下城业务逻辑（修复：读取player.MaxLayer加锁保护）：
@@ -96,7 +98,18 @@ func (s *dungeonService) Enter(ctx context.Context, player *model.Player, layer 
 	oldLayer := player.Layer
 	player.Layer = layer
 	playerID := player.ID
+	// 进入新最高层时更新MaxLayer并持久化
+	if layer > player.MaxLayer {
+		player.MaxLayer = layer
+	}
 	player.Mu().Unlock()
+
+	// 持久化通关进度到数据库
+	if s.playerRepo != nil && layer > playerMaxLayer {
+		if err := s.playerRepo.SaveMaxLayer(ctx, playerID, layer); err != nil {
+			logger.TError(ctx, "保存通关进度失败", "player_id", playerID, "layer", layer, "err", err)
+		}
+	}
 
 	// 从旧层移除（如果之前在某层）
 	if oldLayer > 0 {

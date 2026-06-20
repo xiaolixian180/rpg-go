@@ -427,6 +427,8 @@ func (m *mockWorld) LayerPlayerIDs(layer int32) []uint64            { return nil
 func (m *mockWorld) GetBoss(bossID uint64) *model.Boss              { return m.boss }
 func (m *mockWorld) AddBoss(boss *model.Boss)                       {}
 func (m *mockWorld) RemoveBoss(bossID uint64)                       {}
+func (m *mockWorld) GetLayerBoss(layer int32) *model.Boss           { return nil }
+func (m *mockWorld) SpawnBossIfNeeded(layer int32) *model.Boss      { return nil }
 func (m *mockWorld) Hub() *gateway.Hub                              { return nil }
 func (m *mockWorld) OnLogin(playerID uint64) (*model.Player, error) { return nil, nil }
 func (m *mockWorld) OnLogout(playerID uint64)                       {}

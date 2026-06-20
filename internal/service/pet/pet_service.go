@@ -30,6 +30,10 @@ type PetService interface {
 	Explore(ctx context.Context, playerID uint64, petUID uint64, durationMinutes int32) (*PetExploreResult, *errors.GameError)
 	// Compose 宠物合成（3只同品质合成升阶，持久化新宠物到DB）
 	Compose(ctx context.Context, playerID uint64, petUIDs []uint64) (*PetComposeResult, *errors.GameError)
+	// PetEquip 宠物穿戴装备
+	PetEquip(ctx context.Context, playerID uint64, petUID uint64, slot int32, equipID int32) *errors.GameError
+	// PetUnequip 宠物卸下装备
+	PetUnequip(ctx context.Context, playerID uint64, petUID uint64, slot int32) *errors.GameError
 }
 
 // ==================== 宠物操作结果结构体 ====================
@@ -418,6 +422,109 @@ func (s *petService) Compose(ctx context.Context, playerID uint64, petUIDs []uin
 	logger.TInfo(ctx, "宠物合成", "player_id", playerID, "input_count", len(petUIDs),
 		fmt.Sprintf("result_pet_id=%d, quality=%d, uid=%d", newPetID, newQuality, newPet.UID))
 	return result, nil
+}
+
+// PetEquip 宠物穿戴装备业务逻辑：
+//  1. 查询宠物是否存在并校验归属
+//  2. 校验装备模板是否存在
+//  3. 校验槽位是否匹配
+//  4. 校验宠物等级是否满足需求
+//  5. 校验槽位是否已被占用
+//  6. 设置装备到宠物的 EquippedItems
+func (s *petService) PetEquip(ctx context.Context, playerID uint64, petUID uint64, slot int32, equipID int32) *errors.GameError {
+	// 查询宠物实例
+	pet, err := s.petRepo.GetPetByUID(ctx, petUID)
+	if err != nil || pet == nil {
+		return errors.ErrPetNotFound
+	}
+
+	// 校验宠物归属
+	if pet.OwnerID != playerID {
+		return errors.ErrPetNotFound
+	}
+
+	// 校验槽位范围
+	if slot < 0 || slot >= model.PetSlotMax {
+		return errors.ErrSlotInvalid
+	}
+
+	// 校验装备模板是否存在
+	tmpl, ok := model.PetEquipTemplates[equipID]
+	if !ok {
+		return errors.ErrEquipNotFound
+	}
+
+	// 校验模板槽位是否匹配
+	if tmpl.Slot != slot {
+		return errors.ErrSlotInvalid
+	}
+
+	// 校验宠物等级是否满足需求
+	pet.Mu().RLock()
+	petLevel := pet.Level
+	pet.Mu().RUnlock()
+	if petLevel < tmpl.ReqLevel {
+		return errors.ErrShopLevelLow
+	}
+
+	// 校验槽位是否已被占用
+	pet.Mu().RLock()
+	occupied := pet.EquippedItems[slot] != nil
+	pet.Mu().RUnlock()
+	if occupied {
+		return errors.ErrSlotInvalid
+	}
+
+	// 设置装备
+	pet.Mu().Lock()
+	pet.EquippedItems[slot] = &model.PetEquipment{
+		ID:      equipID,
+		Slot:    slot,
+		Quality: tmpl.Quality,
+	}
+	pet.Mu().Unlock()
+
+	logger.TInfo(ctx, "宠物穿戴装备", "player_id", playerID, "pet_uid", petUID, "slot", slot, "equip_id", equipID)
+	return nil
+}
+
+// PetUnequip 宠物卸下装备业务逻辑：
+//  1. 查询宠物是否存在并校验归属
+//  2. 校验槽位范围
+//  3. 校验槽位是否有装备
+//  4. 清除装备
+func (s *petService) PetUnequip(ctx context.Context, playerID uint64, petUID uint64, slot int32) *errors.GameError {
+	// 查询宠物实例
+	pet, err := s.petRepo.GetPetByUID(ctx, petUID)
+	if err != nil || pet == nil {
+		return errors.ErrPetNotFound
+	}
+
+	// 校验宠物归属
+	if pet.OwnerID != playerID {
+		return errors.ErrPetNotFound
+	}
+
+	// 校验槽位范围
+	if slot < 0 || slot >= model.PetSlotMax {
+		return errors.ErrSlotInvalid
+	}
+
+	// 校验槽位是否有装备
+	pet.Mu().RLock()
+	empty := pet.EquippedItems[slot] == nil
+	pet.Mu().RUnlock()
+	if empty {
+		return errors.ErrSlotEmpty
+	}
+
+	// 清除装备
+	pet.Mu().Lock()
+	pet.EquippedItems[slot] = nil
+	pet.Mu().Unlock()
+
+	logger.TInfo(ctx, "宠物卸下装备", "player_id", playerID, "pet_uid", petUID, "slot", slot)
+	return nil
 }
 
 // randPetID 生成随机宠物模板ID（辅助方法，作为进阶目标的备选方案）

@@ -3,7 +3,9 @@ package handler
 import (
 	"encoding/json"
 
+	"hero-quest/internal/eventbus"
 	"hero-quest/internal/gateway"
+	"hero-quest/internal/model"
 	"hero-quest/internal/protocol"
 	"hero-quest/internal/service"
 	"hero-quest/internal/service/pvp"
@@ -14,11 +16,12 @@ import (
 type PvpHandler struct {
 	world  service.World  // 游戏世界（获取在线玩家和配置）
 	pvpSvc pvp.PvpService // PvP服务接口
+	bus    *eventbus.Bus  // 事件总线
 }
 
 // NewPvpHandler 创建PvP模块处理器实例
-func NewPvpHandler(world service.World, pvpSvc pvp.PvpService) *PvpHandler {
-	return &PvpHandler{world: world, pvpSvc: pvpSvc}
+func NewPvpHandler(world service.World, pvpSvc pvp.PvpService, bus *eventbus.Bus) *PvpHandler {
+	return &PvpHandler{world: world, pvpSvc: pvpSvc, bus: bus}
 }
 
 // HandlePvpAttack 处理PvP攻击请求
@@ -51,6 +54,14 @@ func (h *PvpHandler) HandlePvpAttack(conn *gateway.Conn, body []byte) {
 		AttackerID: pr.AttackerID, TargetID: pr.TargetID,
 		Damage: pr.Damage, GoldGain: pr.GoldGain, HonorGain: pr.HonorGain, IsDead: pr.IsDead,
 	})
+
+	// 发布PvP击杀事件（目标死亡时）
+	if pr.IsDead {
+		h.bus.Publish(eventbus.TopicPvpKill, &eventbus.PvpKillEvent{
+			KillerID: conn.PlayerID,
+			VictimID: req.TargetID,
+		})
+	}
 
 	if pr.IsRedName {
 		h.world.Hub().Broadcast(protocol.MsgIDBroadcast, &protocol.S2CBroadcast{
@@ -87,6 +98,30 @@ func (h *PvpHandler) HandleBountyHunt(conn *gateway.Conn, body []byte) {
 	conn.Send(protocol.MsgIDBountyReward, &protocol.S2CBountyReward{
 		TargetID: br.TargetID, GoldGain: br.GoldGain, HonorGain: br.HonorGain,
 	})
+}
+
+// HandleRedNameList 处理红名列表请求
+func (h *PvpHandler) HandleRedNameList(conn *gateway.Conn, body []byte) {
+	// 收集所有在线玩家到 map
+	players := make(map[uint64]*model.Player)
+	h.world.AllPlayers(func(playerID uint64, p *model.Player) {
+		players[playerID] = p
+	})
+
+	redNameList := h.pvpSvc.GetRedNameList(connCtx(conn), players, h.world.Config().RedNameThreshold)
+
+	resp := &protocol.S2CRedNameList{
+		Players: make([]protocol.RedNameInfo, 0, len(redNameList)),
+	}
+	for _, info := range redNameList {
+		resp.Players = append(resp.Players, protocol.RedNameInfo{
+			PlayerID:  info.PlayerID,
+			Name:      info.Name,
+			KillValue: info.KillValue,
+			Bounty:    info.Bounty,
+		})
+	}
+	conn.Send(protocol.MsgIDRedNameList, resp)
 }
 
 // HandleRevenge 处理复仇请求

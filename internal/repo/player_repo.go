@@ -105,6 +105,19 @@ func (r *playerRepo) SaveMaxLayer(ctx context.Context, playerID uint64, maxLayer
 	return nil
 }
 
+// AddGold 原子地给玩家加金币（gold = gold + delta）。
+// 用于离线卖家交易结算等场景，避免读取-修改-写入的并发竞争。
+func (r *playerRepo) AddGold(ctx context.Context, playerID uint64, delta int64) error {
+	err := r.db.WithContext(ctx).
+		Model(&model.PlayerORM{}).
+		Where("id = ?", playerID).
+		UpdateColumn("gold", gorm.Expr("gold + ?", delta)).Error
+	if err != nil {
+		return fmt.Errorf("add gold player=%d delta=%d: %w", playerID, delta, err)
+	}
+	return nil
+}
+
 func (r *playerRepo) CreatePlayer(ctx context.Context, id uint64, name string, class int32) (uint64, error) {
 	p := model.PlayerORM{
 		ID:         id,
