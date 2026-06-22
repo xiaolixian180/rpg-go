@@ -46,17 +46,30 @@ var QualityName = map[int32]string{
 	QualityRed:    "神话",
 }
 
+// SkillEffect 装备技能特效
+type SkillEffect struct {
+	SkillID    int32   // 绑定技能ID（0=所有技能）
+	EffectType int32   // 效果类型：1=技能增伤
+	Value      float64 // 效果值（如0.15=15%）
+}
+
+// EffectTypeName 效果类型名称
+var EffectTypeName = map[int32]string{
+	1: "技能增伤",
+}
+
 // EquipTemplate 装备模板，定义装备的基础属性
 type EquipTemplate struct {
-	ID           int32  // 模板ID
-	Name         string // 装备名称
-	Slot         int32  // 适配槽位
-	Quality      int32  // 品质等级（对应QualityXxx常量）
-	BaseAtk      int64  // 基础攻击力
-	BaseDef      int64  // 基础防御力
-	BaseHp       int64  // 基础生命值加成
-	SetID        int32  // 所属套装ID（0表示不属于任何套装）
-	RequireLevel int32  // 装备需求等级
+	ID           int32         // 模板ID
+	Name         string        // 装备名称
+	Slot         int32         // 适配槽位
+	Quality      int32         // 品质等级（对应QualityXxx常量）
+	BaseAtk      int64         // 基础攻击力
+	BaseDef      int64         // 基础防御力
+	BaseHp       int64         // 基础生命值加成
+	SetID        int32         // 所属套装ID（0表示不属于任何套装）
+	RequireLevel int32         // 装备需求等级
+	SkillEffects []SkillEffect // 技能特效列表（可为空）
 }
 
 // EquipTemplates 装备模板静态数据表
@@ -66,20 +79,30 @@ var EquipTemplates = map[int32]*EquipTemplate{
 	2: {ID: 2, Name: "铁剑", Slot: SlotWeapon, Quality: QualityWhite, BaseAtk: 12, BaseDef: 0, BaseHp: 0, RequireLevel: 5},
 	3: {ID: 3, Name: "精钢长剑", Slot: SlotWeapon, Quality: QualityGreen, BaseAtk: 25, BaseDef: 2, BaseHp: 0, RequireLevel: 10},
 	4: {ID: 4, Name: "暗影之刃", Slot: SlotWeapon, Quality: QualityBlue, BaseAtk: 45, BaseDef: 5, BaseHp: 0, RequireLevel: 20},
-	5: {ID: 5, Name: "龙牙剑", Slot: SlotWeapon, Quality: QualityPurple, BaseAtk: 80, BaseDef: 10, BaseHp: 50, RequireLevel: 30},
-	6: {ID: 6, Name: "天罚圣剑", Slot: SlotWeapon, Quality: QualityOrange, BaseAtk: 130, BaseDef: 15, BaseHp: 100, RequireLevel: 45},
+	5: {ID: 5, Name: "龙牙剑", Slot: SlotWeapon, Quality: QualityPurple, BaseAtk: 80, BaseDef: 10, BaseHp: 50, RequireLevel: 30, SkillEffects: []SkillEffect{
+		{SkillID: 1, EffectType: 1, Value: 0.15}, // 旋风斩增伤+15%
+	}},
+	6: {ID: 6, Name: "天罚圣剑", Slot: SlotWeapon, Quality: QualityOrange, BaseAtk: 130, BaseDef: 15, BaseHp: 100, RequireLevel: 45, SkillEffects: []SkillEffect{
+		{SkillID: 0, EffectType: 1, Value: 0.20}, // 所有技能增伤+20%
+	}},
 	// 头盔 (Slot 1)
 	10: {ID: 10, Name: "布帽", Slot: SlotHelmet, Quality: QualityWhite, BaseAtk: 0, BaseDef: 3, BaseHp: 10, RequireLevel: 1},
 	11: {ID: 11, Name: "铁头盔", Slot: SlotHelmet, Quality: QualityWhite, BaseAtk: 0, BaseDef: 8, BaseHp: 30, RequireLevel: 5},
 	12: {ID: 12, Name: "秘银头盔", Slot: SlotHelmet, Quality: QualityGreen, BaseAtk: 0, BaseDef: 18, BaseHp: 60, RequireLevel: 10},
-	13: {ID: 13, Name: "暗夜兜帽", Slot: SlotHelmet, Quality: QualityBlue, BaseAtk: 5, BaseDef: 30, BaseHp: 100, RequireLevel: 20},
-	14: {ID: 14, Name: "战神之冠", Slot: SlotHelmet, Quality: QualityPurple, BaseAtk: 10, BaseDef: 50, BaseHp: 180, RequireLevel: 30},
+	13: {ID: 13, Name: "暗夜兜帽", Slot: SlotHelmet, Quality: QualityBlue, BaseAtk: 5, BaseDef: 30, BaseHp: 100, RequireLevel: 20, SkillEffects: []SkillEffect{
+		{SkillID: 0, EffectType: 1, Value: 0.05}, // 所有技能增伤+5%
+	}},
+	14: {ID: 14, Name: "战神之冠", Slot: SlotHelmet, Quality: QualityPurple, BaseAtk: 10, BaseDef: 50, BaseHp: 180, RequireLevel: 30, SkillEffects: []SkillEffect{
+		{SkillID: 0, EffectType: 1, Value: 0.10}, // 所有技能增伤+10%
+	}},
 	// 铠甲 (Slot 2)
 	20: {ID: 20, Name: "布衣", Slot: SlotArmor, Quality: QualityWhite, BaseAtk: 0, BaseDef: 5, BaseHp: 20, RequireLevel: 1},
 	21: {ID: 21, Name: "铁甲", Slot: SlotArmor, Quality: QualityWhite, BaseAtk: 0, BaseDef: 15, BaseHp: 50, RequireLevel: 5},
 	22: {ID: 22, Name: "精钢战甲", Slot: SlotArmor, Quality: QualityGreen, BaseAtk: 0, BaseDef: 30, BaseHp: 100, RequireLevel: 10},
 	23: {ID: 23, Name: "暗影铠甲", Slot: SlotArmor, Quality: QualityBlue, BaseAtk: 5, BaseDef: 55, BaseHp: 180, RequireLevel: 20},
-	24: {ID: 24, Name: "龙鳞铠甲", Slot: SlotArmor, Quality: QualityPurple, BaseAtk: 10, BaseDef: 90, BaseHp: 300, RequireLevel: 30},
+	24: {ID: 24, Name: "龙鳞铠甲", Slot: SlotArmor, Quality: QualityPurple, BaseAtk: 10, BaseDef: 90, BaseHp: 300, RequireLevel: 30, SkillEffects: []SkillEffect{
+		{SkillID: 0, EffectType: 1, Value: 0.08}, // 所有技能增伤+8%
+	}},
 	// 手套 (Slot 3)
 	30: {ID: 30, Name: "布手套", Slot: SlotGloves, Quality: QualityWhite, BaseAtk: 2, BaseDef: 2, BaseHp: 0, RequireLevel: 1},
 	31: {ID: 31, Name: "铁手套", Slot: SlotGloves, Quality: QualityWhite, BaseAtk: 5, BaseDef: 5, BaseHp: 0, RequireLevel: 5},

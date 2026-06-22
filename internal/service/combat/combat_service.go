@@ -210,19 +210,25 @@ func (s *combatService) findTarget(playerLayer int32, targetID uint64) (*combatT
 
 // playerCombatAttrs holds pre-computed player attributes read under RLock
 type playerCombatAttrs struct {
-	attack     int64
-	critRate   float64
-	critDamage float64
+	attack          int64
+	critRate        float64
+	critDamage      float64
+	equipSkillBonus float64 // 装备技能增伤总和（上限0.5）
 }
 
-// readCombatAttrs reads player combat attributes under RLock
-func readCombatAttrs(p *model.Player) playerCombatAttrs {
+// readCombatAttrs reads player combat attributes under RLock for a given skillID
+func readCombatAttrs(p *model.Player, skillID int32) playerCombatAttrs {
 	p.Mu().RLock()
 	defer p.Mu().RUnlock()
+	bonus := p.CalcSkillEffectBonus(skillID)
+	if bonus > 0.5 {
+		bonus = 0.5
+	}
 	return playerCombatAttrs{
-		attack:     p.CalcAttack(),
-		critRate:   p.CalcCritRate(),
-		critDamage: p.CalcCritDamage(),
+		attack:          p.CalcAttack(),
+		critRate:        p.CalcCritRate(),
+		critDamage:      p.CalcCritDamage(),
+		equipSkillBonus: bonus,
 	}
 }
 
@@ -241,6 +247,11 @@ func (s *combatService) calcDamage(attrs playerCombatAttrs, skillID int32) (dama
 	}
 
 	damage = int64(float64(attack) * multiplier)
+
+	// 装备技能增伤
+	if attrs.equipSkillBonus > 0 {
+		damage = int64(float64(damage) * (1 + attrs.equipSkillBonus))
+	}
 
 	// 暴击判定
 	isCrit = rand.Float64() < attrs.critRate
@@ -411,7 +422,7 @@ func (s *combatService) Attack(ctx context.Context, attacker *model.Player, targ
 	}
 
 	// 计算伤害值（普攻固定倍率1.0，技能走SkillCast流程并校验冷却）
-	attackerAttrs := readCombatAttrs(attacker)
+	attackerAttrs := readCombatAttrs(attacker, 0)
 	rawDamage, isCrit := s.calcDamage(attackerAttrs, 0)
 	result.IsCrit = isCrit
 
@@ -542,7 +553,7 @@ func (s *combatService) SkillCast(ctx context.Context, caster *model.Player, ski
 	}
 
 	// 计算技能伤害（预计算属性值，使用技能倍率 + 暴击 + 防御减免）
-	casterAttrs := readCombatAttrs(caster)
+	casterAttrs := readCombatAttrs(caster, skillID)
 	rawDamage, isCrit := s.calcDamage(casterAttrs, skillID)
 	def := target.targetDef()
 	damage := applyDefense(rawDamage, def)

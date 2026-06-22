@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"fmt"
+
 	"hero-quest/internal/model"
 	"hero-quest/internal/protocol"
 )
@@ -30,6 +32,19 @@ func toPlayerData(p *model.Player) *protocol.PlayerData {
 			ed.BaseDef = tmpl.BaseDef
 			ed.BaseHp = tmpl.BaseHp
 			ed.RequireLevel = tmpl.RequireLevel
+			// 序列化技能特效
+			if len(tmpl.SkillEffects) > 0 {
+				ed.SkillEffects = make([]protocol.SkillEffectData, 0, len(tmpl.SkillEffects))
+				for _, eff := range tmpl.SkillEffects {
+					desc := formatSkillEffectDesc(eff)
+					ed.SkillEffects = append(ed.SkillEffects, protocol.SkillEffectData{
+						SkillID:    eff.SkillID,
+						EffectType: eff.EffectType,
+						Value:      eff.Value,
+						Desc:       desc,
+					})
+				}
+			}
 		}
 		equipped = append(equipped, ed)
 	}
@@ -132,4 +147,20 @@ func toRankingItemList(src []*model.RankingItem) []protocol.RankingItem {
 		}
 	}
 	return result
+}
+
+// formatSkillEffectDesc 生成技能特效的中文描述
+func formatSkillEffectDesc(eff model.SkillEffect) string {
+	pct := int(eff.Value * 100)
+	typeName := model.EffectTypeName[eff.EffectType]
+	if typeName == "" {
+		typeName = "未知"
+	}
+	if eff.SkillID == 0 {
+		return fmt.Sprintf("所有技能%s+%d%%", typeName, pct)
+	}
+	if skillDef, ok := model.SkillDefs[eff.SkillID]; ok {
+		return fmt.Sprintf("%s%s+%d%%", skillDef.Name, typeName, pct)
+	}
+	return fmt.Sprintf("技能%d%s+%d%%", eff.SkillID, typeName, pct)
 }

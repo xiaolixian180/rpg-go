@@ -56,16 +56,25 @@ type PlayerData struct {
 
 // EquipmentData 装备实例数据，随 PlayerData 下发
 type EquipmentData struct {
-	Slot            int32  `json:"slot"`              // 槽位（0~7）
-	EquipID         int32  `json:"equip_id"`          // 装备模板ID
-	Name            string `json:"name"`              // 装备名称（来自模板）
-	Quality         int32  `json:"quality"`           // 品质
-	StrengthenLevel int32  `json:"strengthen_level"`  // 强化等级
-	EnchantAttr     string `json:"enchant_attr"`      // 附魔属性描述
-	BaseAtk         int64  `json:"base_atk"`          // 基础攻击力（含品质系数）
-	BaseDef         int64  `json:"base_def"`          // 基础防御力
-	BaseHp          int64  `json:"base_hp"`           // 基础生命值加成
-	RequireLevel    int32  `json:"require_level"`     // 装备需求等级
+	Slot            int32             `json:"slot"`              // 槽位（0~7）
+	EquipID         int32             `json:"equip_id"`          // 装备模板ID
+	Name            string            `json:"name"`              // 装备名称（来自模板）
+	Quality         int32             `json:"quality"`           // 品质
+	StrengthenLevel int32             `json:"strengthen_level"`  // 强化等级
+	EnchantAttr     string            `json:"enchant_attr"`      // 附魔属性描述
+	BaseAtk         int64             `json:"base_atk"`          // 基础攻击力（含品质系数）
+	BaseDef         int64             `json:"base_def"`          // 基础防御力
+	BaseHp          int64             `json:"base_hp"`           // 基础生命值加成
+	RequireLevel    int32             `json:"require_level"`     // 装备需求等级
+	SkillEffects    []SkillEffectData `json:"skill_effects"`     // 技能特效列表（可为空）
+}
+
+// SkillEffectData 装备技能特效数据
+type SkillEffectData struct {
+	SkillID    int32   `json:"skill_id"`    // 绑定技能ID（0=所有技能）
+	EffectType int32   `json:"effect_type"` // 效果类型：1=技能增伤
+	Value      float64 `json:"value"`       // 效果值（如0.15=15%）
+	Desc       string  `json:"desc"`        // 效果描述
 }
 
 // ==================== 地下城 ====================

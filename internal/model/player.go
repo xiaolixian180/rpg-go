@@ -138,6 +138,29 @@ func (p *Player) CalcCritDamage() float64 {
 	return 1.5 + float64(p.Str)*0.01
 }
 
+// CalcSkillEffectBonus 计算装备技能特效增伤总和
+// skillID=0 表示所有技能，否则只统计匹配指定技能的增伤
+func (p *Player) CalcSkillEffectBonus(skillID int32) float64 {
+	var total float64
+	for _, eq := range p.EquippedItems {
+		if eq == nil {
+			continue
+		}
+		tmpl, ok := EquipTemplates[eq.EquipID]
+		if !ok {
+			continue
+		}
+		for _, eff := range tmpl.SkillEffects {
+			if eff.EffectType == 1 { // 技能增伤
+				if eff.SkillID == 0 || eff.SkillID == skillID {
+					total += eff.Value
+				}
+			}
+		}
+	}
+	return total
+}
+
 // IsInvincible 判断玩家当前是否处于无敌状态。
 // 无敌状态在PvP被击杀后持续30秒，期间无法被其他玩家攻击。
 func (p *Player) IsInvincible() bool {

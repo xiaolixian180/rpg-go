@@ -27,7 +27,7 @@ func TestCalcDamage_BasicAttack(t *testing.T) {
 	// 普通攻击(无技能)：multiplier=1.0，最低伤害应 >= attack
 	minDamage := int64(999999)
 	for i := 0; i < 100; i++ {
-		damage, _ := svc.calcDamage(readCombatAttrs(player), 0)
+		damage, _ := svc.calcDamage(readCombatAttrs(player, 0), 0)
 		if damage < minDamage {
 			minDamage = damage
 		}
@@ -53,8 +53,8 @@ func TestCalcDamage_WithSkillMultiplier(t *testing.T) {
 	skillSum := int64(0)
 	rounds := 200
 	for i := 0; i < rounds; i++ {
-		d1, _ := svc.calcDamage(readCombatAttrs(player), 0)
-		d2, _ := svc.calcDamage(readCombatAttrs(player), 1)
+		d1, _ := svc.calcDamage(readCombatAttrs(player, 0), 0)
+		d2, _ := svc.calcDamage(readCombatAttrs(player, 0), 1)
 		normalSum += d1
 		skillSum += d2
 	}
@@ -84,7 +84,7 @@ func TestCalcDamage_CritIncreasesDamage(t *testing.T) {
 	normalCount := 0
 
 	for i := 0; i < 1000; i++ {
-		damage, isCrit := svc.calcDamage(readCombatAttrs(player), 0)
+		damage, isCrit := svc.calcDamage(readCombatAttrs(player, 0), 0)
 		if isCrit {
 			critCount++
 			critDamageSum += damage
@@ -119,8 +119,8 @@ func TestCalcDamage_StrAndLevelAffectAttack(t *testing.T) {
 	rounds := 100
 
 	for i := 0; i < rounds; i++ {
-		d1, _ := svc.calcDamage(readCombatAttrs(weakPlayer), 0)
-		d2, _ := svc.calcDamage(readCombatAttrs(strongPlayer), 0)
+		d1, _ := svc.calcDamage(readCombatAttrs(weakPlayer, 0), 0)
+		d2, _ := svc.calcDamage(readCombatAttrs(strongPlayer, 0), 0)
 		weakSum += d1
 		strongSum += d2
 	}
