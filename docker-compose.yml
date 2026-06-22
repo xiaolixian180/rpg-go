@@ -14,6 +14,9 @@ services:
       - DB_HOST=mysql
       - HQ_MONGODB_URI=mongodb://root:${HQ_MONGO_PASSWORD:-hero_quest_mongo_2026}@mongodb:27017
       - REDIS_HOST=redis
+      - HQ_JWT_SECRET=hero-quest-secret-key
+      - HQ_DATABASE_PASSWORD=hero_quest_2026
+      - HQ_REDIS_PASSWORD=hero_quest_redis_2026
     restart: unless-stopped
     labels:
       logging: "promtail"          # promtail 自动发现标记

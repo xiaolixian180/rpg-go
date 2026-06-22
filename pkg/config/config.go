@@ -28,12 +28,12 @@ func DefaultGameConfig() GameConfig {
 // Config 是顶层配置结构体，包含服务器运行所需的全部子配置。
 // 每个字段对应 YAML 配置文件中的一个顶级区块。
 type Config struct {
-	Server ServerConfig `yaml:"server"`   // 服务器网络与连接相关配置
-	DB     DBConfig     `yaml:"database"` // 数据库连接与连接池配置
-	Mongo  MongoConfig  `yaml:"mongodb"`  // MongoDB 文档数据库连接配置
-	Redis  RedisConfig  `yaml:"redis"`    // Redis 缓存连接配置
-	JWT    JWTConfig    `yaml:"jwt"`      // JWT 认证配置
-	Game   GameConfig   `yaml:"game"`     // 游戏核心逻辑与数值配置
+	Server ServerConfig `yaml:"server" mapstructure:"server"`   // 服务器网络与连接相关配置
+	DB     DBConfig     `yaml:"database" mapstructure:"database"` // 数据库连接与连接池配置
+	Mongo  MongoConfig  `yaml:"mongodb" mapstructure:"mongodb"`  // MongoDB 文档数据库连接配置
+	Redis  RedisConfig  `yaml:"redis" mapstructure:"redis"`    // Redis 缓存连接配置
+	JWT    JWTConfig    `yaml:"jwt" mapstructure:"jwt"`      // JWT 认证配置
+	Game   GameConfig   `yaml:"game" mapstructure:"game"`     // 游戏核心逻辑与数值配置
 }
 
 // MongoConfig 定义 MongoDB 的连接参数。
@@ -45,64 +45,64 @@ type MongoConfig struct {
 // ServerConfig 定义服务器的网络参数和连接控制策略，
 // 包括监听地址、超时时间、限流与心跳等关键运维参数。
 type ServerConfig struct {
-	Host             string `yaml:"host"`                // 服务器监听地址，如 "0.0.0.0" 或 "127.0.0.1"
-	Port             int    `yaml:"port"`                // 服务器监听端口号
-	ReadTimeout      int    `yaml:"read_timeout"`        // 读取请求超时时间（秒），防止慢速客户端占用连接
-	WriteTimeout     int    `yaml:"write_timeout"`       // 写入响应超时时间（秒），防止响应阻塞
-	MaxConnPerIP     int    `yaml:"max_conn_per_ip"`     // 单 IP 最大并发连接数，用于防止单个客户端过度占用资源
-	HeartbeatSec     int    `yaml:"heartbeat_sec"`       // 客户端心跳间隔（秒），用于检测连接存活状态
-	ReconnectSec     int    `yaml:"reconnect_sec"`       // 断线重连等待时间（秒），客户端掉线后允许重连的窗口期
-	MaxRequestPerSec int    `yaml:"max_request_per_sec"` // 单 IP 每秒最大请求数，限流防刷
+	Host             string `yaml:"host" mapstructure:"host"`
+	Port             int    `yaml:"port" mapstructure:"port"`
+	ReadTimeout      int    `yaml:"read_timeout" mapstructure:"read_timeout"`
+	WriteTimeout     int    `yaml:"write_timeout" mapstructure:"write_timeout"`
+	MaxConnPerIP     int    `yaml:"max_conn_per_ip" mapstructure:"max_conn_per_ip"`
+	HeartbeatSec     int    `yaml:"heartbeat_sec" mapstructure:"heartbeat_sec"`
+	ReconnectSec     int    `yaml:"reconnect_sec" mapstructure:"reconnect_sec"`
+	MaxRequestPerSec int    `yaml:"max_request_per_sec" mapstructure:"max_request_per_sec"`
 }
 
 // DBConfig 定义关系型数据库（MySQL/PostgreSQL 等）的连接参数和连接池配置。
 // 合理的连接池参数对高并发游戏服务器的数据库性能至关重要。
 type DBConfig struct {
-	Host     string `yaml:"host"`     // 数据库主机地址
-	Port     int    `yaml:"port"`     // 数据库端口号
-	User     string `yaml:"user"`     // 数据库登录用户名
-	Password string `yaml:"password"` // 数据库登录密码
-	DBName   string `yaml:"dbname"`   // 数据库名称，即要连接的具体数据库实例
-	MaxIdle  int    `yaml:"max_idle"` // 连接池最大空闲连接数，空闲连接过多浪费资源，过少则频繁建连
-	MaxOpen  int    `yaml:"max_open"` // 连接池最大打开连接数，限制数据库总连接数以保护数据库
+	Host     string `yaml:"host" mapstructure:"host"`     // 数据库主机地址
+	Port     int    `yaml:"port" mapstructure:"port"`     // 数据库端口号
+	User     string `yaml:"user" mapstructure:"user"`     // 数据库登录用户名
+	Password string `yaml:"password" mapstructure:"password"` // 数据库登录密码
+	DBName   string `yaml:"dbname" mapstructure:"dbname"`   // 数据库名称，即要连接的具体数据库实例
+	MaxIdle  int    `yaml:"max_idle" mapstructure:"max_idle"` // 连接池最大空闲连接数，空闲连接过多浪费资源，过少则频繁建连
+	MaxOpen  int    `yaml:"max_open" mapstructure:"max_open"` // 连接池最大打开连接数，限制数据库总连接数以保护数据库
 }
 
 // RedisConfig 定义 Redis 缓存的连接参数。
 // Redis 在游戏中常用于会话管理、排行榜、实时数据缓存等场景。
 type RedisConfig struct {
-	Host     string `yaml:"host"`     // Redis 服务器地址
-	Port     int    `yaml:"port"`     // Redis 服务器端口号
-	Password string `yaml:"password"` // Redis 认证密码，为空表示无密码
-	DB       int    `yaml:"db"`       // Redis 数据库编号（0-15），用于隔离不同环境或业务的数据
+	Host     string `yaml:"host" mapstructure:"host"`     // Redis 服务器地址
+	Port     int    `yaml:"port" mapstructure:"port"`     // Redis 服务器端口号
+	Password string `yaml:"password" mapstructure:"password"` // Redis 认证密码，为空表示无密码
+	DB       int    `yaml:"db" mapstructure:"db"`       // Redis 数据库编号（0-15），用于隔离不同环境或业务的数据
 }
 
 // JWTConfig 定义 JWT 认证相关的配置参数。
 // secret 用于 HMAC 签名，expire_hours 控制令牌有效期。
 type JWTConfig struct {
-	Secret      string `yaml:"secret"`       // JWT 签名密钥
-	ExpireHours int    `yaml:"expire_hours"` // 令牌有效时长（小时）
+	Secret      string `yaml:"secret" mapstructure:"secret"`       // JWT 签名密钥
+	ExpireHours int    `yaml:"expire_hours" mapstructure:"expire_hours"` // 令牌有效时长（小时）
 }
 
 // GameConfig 定义游戏核心逻辑相关的数值参数。
 // 这些参数直接影响游戏平衡性，修改时需谨慎评估对玩法的影响。
 type GameConfig struct {
-	MaxLevel         int     `yaml:"max_level"`          // 玩家等级上限，达到此等级后无法继续升级
-	MaxDungeonLayer  int     `yaml:"max_dungeon_layer"`  // 地牢最大层数，限制玩家可探索的深度
-	PvpGoldPenalty   float64 `yaml:"pvp_gold_penalty"`   // PVP 失败金币惩罚比例（如 0.1 表示扣除 10%）
-	PvpHonorGain     int32   `yaml:"pvp_honor_gain"`     // PVP 胜利获得荣誉值，用于荣誉系统排名和奖励
-	RedNameThreshold int32   `yaml:"red_name_threshold"` // 红名阈值（恶意击杀次数），超过此值玩家变为红名状态
-	SkillResetCost   int64   `yaml:"skill_reset_cost"`   // 技能重置金币消耗
+	MaxLevel         int     `yaml:"max_level" mapstructure:"max_level"`          // 玩家等级上限，达到此等级后无法继续升级
+	MaxDungeonLayer  int     `yaml:"max_dungeon_layer" mapstructure:"max_dungeon_layer"`  // 地牢最大层数，限制玩家可探索的深度
+	PvpGoldPenalty   float64 `yaml:"pvp_gold_penalty" mapstructure:"pvp_gold_penalty"`   // PVP 失败金币惩罚比例（如 0.1 表示扣除 10%）
+	PvpHonorGain     int32   `yaml:"pvp_honor_gain" mapstructure:"pvp_honor_gain"`     // PVP 胜利获得荣誉值，用于荣誉系统排名和奖励
+	RedNameThreshold int32   `yaml:"red_name_threshold" mapstructure:"red_name_threshold"` // 红名阈值（恶意击杀次数），超过此值玩家变为红名状态
+	SkillResetCost   int64   `yaml:"skill_reset_cost" mapstructure:"skill_reset_cost"`   // 技能重置金币消耗
 
 	// 以下为新增的游戏数值配置，统一收归到配置文件，支持热更新
-	TeleportCost      int64   `yaml:"teleport_cost"`        // 层间传送金币消耗
-	SkillMultiplier   float64 `yaml:"skill_multiplier"`     // 技能伤害倍率（相对普攻）
-	InvincibleSec     int     `yaml:"invincible_sec"`       // PvP 死亡后无敌保护时间（秒）
-	PetLevelUpCost    int64   `yaml:"pet_levelup_cost"`     // 宠物升级金币消耗
-	BountyGoldPerKill int64   `yaml:"bounty_gold_per_kill"` // 悬赏金币 = 目标杀戮值 * 此值
-	BountyHonorGain   int32   `yaml:"bounty_honor_gain"`    // 悬赏击杀获得荣誉值
-	BossDropPurple    float64 `yaml:"boss_drop_purple"`     // Boss掉落紫色品质概率
-	BossDropOrange    float64 `yaml:"boss_drop_orange"`     // Boss掉落橙色品质概率
-	PageSize          int32   `yaml:"page_size"`            // 交易行每页条数
+	TeleportCost      int64   `yaml:"teleport_cost" mapstructure:"teleport_cost"`        // 层间传送金币消耗
+	SkillMultiplier   float64 `yaml:"skill_multiplier" mapstructure:"skill_multiplier"`     // 技能伤害倍率（相对普攻）
+	InvincibleSec     int     `yaml:"invincible_sec" mapstructure:"invincible_sec"`       // PvP 死亡后无敌保护时间（秒）
+	PetLevelUpCost    int64   `yaml:"pet_levelup_cost" mapstructure:"pet_levelup_cost"`     // 宠物升级金币消耗
+	BountyGoldPerKill int64   `yaml:"bounty_gold_per_kill" mapstructure:"bounty_gold_per_kill"` // 悬赏金币 = 目标杀戮值 * 此值
+	BountyHonorGain   int32   `yaml:"bounty_honor_gain" mapstructure:"bounty_honor_gain"`    // 悬赏击杀获得荣誉值
+	BossDropPurple    float64 `yaml:"boss_drop_purple" mapstructure:"boss_drop_purple"`     // Boss掉落紫色品质概率
+	BossDropOrange    float64 `yaml:"boss_drop_orange" mapstructure:"boss_drop_orange"`     // Boss掉落橙色品质概率
+	PageSize          int32   `yaml:"page_size" mapstructure:"page_size"`            // 交易行每页条数
 }
 
 // Validate 校验配置项的合法性，确保必填项非空、数值参数在合理范围内。
