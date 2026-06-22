@@ -2,6 +2,7 @@
 package scheduler
 
 import (
+	"context"
 	"time"
 
 	"hero-quest/internal/eventbus"
@@ -42,7 +43,7 @@ func RegisterAutoBattleTask(s *Scheduler, world iface.World, combatSvc combat.Co
 			}
 
 			// 通过 CombatService 执行攻击（使用普攻，skillID=0）
-			cr, ge := combatSvc.Attack(nil, p, monster.ID, 0)
+			cr, ge := combatSvc.Attack(context.Background(), p, monster.ID, 0)
 			if ge != nil {
 				return
 			}

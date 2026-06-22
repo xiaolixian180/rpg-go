@@ -23,6 +23,10 @@ redis:
   password: "hero_quest_redis_2026"
   db: 0
 
+mongodb:
+  uri: "mongodb://root:hero_quest_mongo_2026@127.0.0.1:27017"
+  database: "hero_quest"
+
 jwt:
   secret: "hero-quest-secret-key"
   expire_hours: 24
