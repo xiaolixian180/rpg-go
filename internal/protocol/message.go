@@ -31,25 +31,41 @@ type S2CCreatePlayerResp struct {
 
 // PlayerData 玩家完整数据，登录成功后下发
 type PlayerData struct {
-	ID         uint64           `json:"id"`          // 玩家唯一ID
-	Name       string           `json:"name"`        // 角色名称
-	Class      int32            `json:"class"`       // 职业
-	Level      int32            `json:"level"`       // 等级（上限60）
-	Exp        int64            `json:"exp"`         // 当前经验值
-	Gold       int64            `json:"gold"`        // 金币
-	Honor      int32            `json:"honor"`       // 荣誉值（PvP获得）
-	KillValue  int32            `json:"kill_value"`  // 杀戮值（杀白名玩家增加）
-	Str        int32            `json:"str"`         // 力量属性
-	Agi        int32            `json:"agi"`         // 敏捷属性
-	Int        int32            `json:"int"`         // 智力属性
-	Con        int32            `json:"con"`         // 体质属性
-	AttrPoints int32            `json:"attr_points"` // 未分配属性点
-	MaxLayer   int32            `json:"max_layer"`   // 最高通关层数
-	Hp         int64            `json:"hp"`          // 当前生命值
-	MaxHp      int64            `json:"max_hp"`      // 生命值上限
-	Mp         int64            `json:"mp"`          // 当前魔法值
-	MaxMp      int64            `json:"max_mp"`      // 魔法值上限
-	Items      map[uint32]int32 `json:"items"`       // 背包物品（item_id -> 数量）
+	ID            uint64           `json:"id"`          // 玩家唯一ID
+	Name          string           `json:"name"`        // 角色名称
+	Class         int32            `json:"class"`       // 职业
+	Level         int32            `json:"level"`       // 等级（上限60）
+	Exp           int64            `json:"exp"`         // 当前经验值
+	Gold          int64            `json:"gold"`        // 金币
+	Honor         int32            `json:"honor"`       // 荣誉值（PvP获得）
+	KillValue     int32            `json:"kill_value"`  // 杀戮值（杀白名玩家增加）
+	Str           int32            `json:"str"`         // 力量属性
+	Agi           int32            `json:"agi"`         // 敏捷属性
+	Int           int32            `json:"int"`         // 智力属性
+	Con           int32            `json:"con"`         // 体质属性
+	Def           int32            `json:"def"`         // 防御属性
+	AttrPoints    int32            `json:"attr_points"` // 未分配属性点
+	MaxLayer      int32            `json:"max_layer"`   // 最高通关层数
+	Hp            int64            `json:"hp"`          // 当前生命值
+	MaxHp         int64            `json:"max_hp"`      // 生命值上限
+	Mp            int64            `json:"mp"`          // 当前魔法值
+	MaxMp         int64            `json:"max_mp"`      // 魔法值上限
+	Items         map[uint32]int32 `json:"items"`       // 背包物品（item_id -> 数量）
+	EquippedItems []EquipmentData  `json:"equipment"`   // 已装备的装备列表
+}
+
+// EquipmentData 装备实例数据，随 PlayerData 下发
+type EquipmentData struct {
+	Slot            int32  `json:"slot"`              // 槽位（0~7）
+	EquipID         int32  `json:"equip_id"`          // 装备模板ID
+	Name            string `json:"name"`              // 装备名称（来自模板）
+	Quality         int32  `json:"quality"`           // 品质
+	StrengthenLevel int32  `json:"strengthen_level"`  // 强化等级
+	EnchantAttr     string `json:"enchant_attr"`      // 附魔属性描述
+	BaseAtk         int64  `json:"base_atk"`          // 基础攻击力（含品质系数）
+	BaseDef         int64  `json:"base_def"`          // 基础防御力
+	BaseHp          int64  `json:"base_hp"`           // 基础生命值加成
+	RequireLevel    int32  `json:"require_level"`     // 装备需求等级
 }
 
 // ==================== 地下城 ====================

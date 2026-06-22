@@ -10,26 +10,52 @@ import (
 func toPlayerData(p *model.Player) *protocol.PlayerData {
 	p.Mu().RLock()
 	defer p.Mu().RUnlock()
+
+	// 序列化已装备的装备列表，附带模板基础属性供客户端展示
+	var equipped []protocol.EquipmentData
+	for _, eq := range p.EquippedItems {
+		if eq == nil {
+			continue
+		}
+		ed := protocol.EquipmentData{
+			Slot:            eq.Slot,
+			EquipID:         eq.EquipID,
+			Quality:         eq.Quality,
+			StrengthenLevel: eq.StrengthenLevel,
+			EnchantAttr:     eq.EnchantAttr,
+		}
+		if tmpl, ok := model.EquipTemplates[eq.EquipID]; ok {
+			ed.Name = tmpl.Name
+			ed.BaseAtk = tmpl.BaseAtk
+			ed.BaseDef = tmpl.BaseDef
+			ed.BaseHp = tmpl.BaseHp
+			ed.RequireLevel = tmpl.RequireLevel
+		}
+		equipped = append(equipped, ed)
+	}
+
 	return &protocol.PlayerData{
-		ID:         p.ID,
-		Name:       p.Name,
-		Class:      p.Class,
-		Level:      p.Level,
-		Exp:        p.Exp,
-		Gold:       p.Gold,
-		Honor:      p.Honor,
-		KillValue:  p.KillValue,
-		Str:        p.Str,
-		Agi:        p.Agi,
-		Int:        p.Int,
-		Con:        p.Con,
-		AttrPoints: p.AttrPoints,
-		MaxLayer:   p.MaxLayer,
-		Hp:         p.Hp,
-		MaxHp:      p.MaxHp,
-		Mp:         p.Mp,
-		MaxMp:      p.MaxMp,
-		Items:      p.Items,
+		ID:            p.ID,
+		Name:          p.Name,
+		Class:         p.Class,
+		Level:         p.Level,
+		Exp:           p.Exp,
+		Gold:          p.Gold,
+		Honor:         p.Honor,
+		KillValue:     p.KillValue,
+		Str:           p.Str,
+		Agi:           p.Agi,
+		Int:           p.Int,
+		Con:           p.Con,
+		Def:           p.Def,
+		AttrPoints:    p.AttrPoints,
+		MaxLayer:      p.MaxLayer,
+		Hp:            p.Hp,
+		MaxHp:         p.MaxHp,
+		Mp:            p.Mp,
+		MaxMp:         p.MaxMp,
+		Items:         p.Items,
+		EquippedItems: equipped,
 	}
 }
 
