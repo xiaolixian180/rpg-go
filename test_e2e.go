@@ -18,7 +18,7 @@ import (
 const (
 	jwtSecret = "hero-quest-secret-key"
 	serverURL = "ws://localhost:8088/ws"
-	playerID  = uint64(200003)
+	playerID  = uint64(200010)
 )
 
 // Message IDs matching both Go server and Unity client
