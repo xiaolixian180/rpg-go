@@ -28,7 +28,7 @@ type Enforcer struct {
 //   - p: 策略定义，同样包含 sub、obj、act
 //   - g: 角色定义，支持角色继承（玩家 -> 角色）
 //   - e: 策略效果，只要有一条策略匹配就允许
-//   - m: 匹配器，先通过 g() 判断主体是否属于策略中的角色，再精确匹配对象和操作
+//   - m: 匹配器，先通过 g() 判断主体是否属于策略中的角色，再用 keyMatch 通配匹配对象、精确匹配操作
 const casbinModelText = `
 [request_definition]
 r = sub, obj, act
@@ -43,7 +43,7 @@ g = _, _
 e = some(where (p.eft == allow))
 
 [matchers]
-m = g(r.sub, p.sub) && r.obj == p.obj && r.act == p.act
+m = g(r.sub, p.sub) && keyMatch(r.obj, p.obj) && r.act == p.act
 `
 
 // Config Casbin 初始化配置，包含数据库连接参数

@@ -77,6 +77,11 @@ func (h *AuthHandler) HandleCreatePlayer(conn *gateway.Conn, body []byte) {
 		return
 	}
 
+	// 创建成功后将玩家加载到游戏世界内存中，使后续的 EnterDungeon 等操作能查到该玩家
+	if _, err := h.world.OnLogin(playerID); err != nil {
+		logger.Warn("创建角色后加载到内存失败", "player_id", playerID, "err", err)
+	}
+
 	conn.Send(protocol.MsgIDCreatePlayerResp, &protocol.S2CCreatePlayerResp{
 		Code:   errors.ErrSuccess.Code,
 		Player: *toPlayerData(player),

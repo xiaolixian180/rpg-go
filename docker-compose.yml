@@ -11,6 +11,9 @@ services:
     environment:
       - DB_HOST=mysql
       - REDIS_HOST=redis
+      - HQ_JWT_SECRET=hero-quest-secret-key
+      - HQ_DATABASE_PASSWORD=hero_quest_2026
+      - HQ_REDIS_PASSWORD=hero_quest_redis_2026
     restart: unless-stopped
     labels:
       logging: "promtail"          # promtail 自动发现标记
