@@ -132,6 +132,34 @@ const (
 	MsgIDChatHistory     uint16 = 2304 // 客户端→服务端：查询历史消息
 	MsgIDChatHistoryResp uint16 = 2305 // 服务端→客户端：历史消息列表
 
+	// 战局模块 2401-2499
+	MsgIDRaidEnter            uint16 = 2401 // C2S: 进入战局
+	MsgIDRaidEnterResp        uint16 = 2402 // S2C: 战局地图数据
+	MsgIDRaidLeave            uint16 = 2403 // C2S: 离开战局
+	MsgIDRaidLeaveResp        uint16 = 2404 // S2C: 离开确认
+	MsgIDRaidInfo             uint16 = 2405 // S2C: 战局状态推送
+	MsgIDRaidExtract          uint16 = 2406 // C2S: 开始撤离
+	MsgIDRaidExtractResp      uint16 = 2407 // S2C: 撤离结果
+	MsgIDRaidExtractProgress  uint16 = 2408 // S2C: 撤离倒计时
+	MsgIDRaidLootOpen         uint16 = 2409 // C2S: 打开容器
+	MsgIDRaidLootOpenResp     uint16 = 2410 // S2C: 容器内容
+	MsgIDRaidLootPickup       uint16 = 2411 // C2S: 拾取物品
+	MsgIDRaidLootPickupResp   uint16 = 2412 // S2C: 拾取结果
+	MsgIDRaidLootDiscard      uint16 = 2413 // C2S: 丢弃物品
+	MsgIDRaidLootDiscardResp  uint16 = 2414 // S2C: 丢弃结果
+	MsgIDRaidInventory        uint16 = 2415 // S2C: 战局背包同步
+	MsgIDRaidDeath            uint16 = 2416 // S2C: 战局死亡
+	MsgIDRaidTimer            uint16 = 2417 // S2C: 剩余时间
+	MsgIDRaidMonsterRefresh   uint16 = 2418 // S2C: 怪物刷新
+	MsgIDRaidPvpAttack        uint16 = 2419 // C2S: 战局PvP攻击
+	MsgIDRaidPvpResult        uint16 = 2420 // S2C: PvP结果
+	MsgIDRaidMapList          uint16 = 2421 // C2S: 查询地图列表
+	MsgIDRaidMapListResp      uint16 = 2422 // S2C: 地图列表
+	MsgIDRaidStash            uint16 = 2423 // C2S: 查询仓库
+	MsgIDRaidStashResp        uint16 = 2424 // S2C: 仓库内容
+	MsgIDRaidCancelExtract    uint16 = 2425 // C2S: 取消撤离
+	MsgIDRaidCancelExtractResp uint16 = 2426 // S2C: 取消撤离结果
+
 	// 系统模块 9001-9099
 	MsgIDBroadcast uint16 = 9001 // 服务端→客户端：全服广播
 	MsgIDHeartbeat uint16 = 9002 // 心跳（双向）

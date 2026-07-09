@@ -150,6 +150,22 @@ var (
 	ErrItemCooldown = New(1202, "冷却中")  // 物品使用冷却
 )
 
+// ==================== 战局模块 1300~1399 ====================
+
+var (
+	ErrRaidAlreadyIn         = New(1300, "已在战局中")       // 重复进入战局
+	ErrRaidNotIn             = New(1301, "不在战局中")       // 不在战局中时操作
+	ErrRaidMapNotFound       = New(1302, "战局不存在")       // 战局ID无效
+	ErrRaidContainerNotFound = New(1303, "容器不存在")       // 战利品容器ID无效
+	ErrRaidContainerOpened   = New(1304, "容器已打开")       // 容器已被打开
+	ErrRaidNotNearExtraction = New(1305, "不在撤离点范围内")  // 不在撤离点附近
+	ErrRaidNotExtracting     = New(1306, "未在撤离中")       // 未在撤离状态时取消
+	ErrRaidTemplateNotFound  = New(1307, "地图模板不存在")    // 地图模板ID无效
+	ErrRaidTargetNotInPvP    = New(1308, "目标不在PvP区域")  // 目标不在PvP区域内
+	ErrRaidNotSameMap        = New(1309, "不在同一战局")     // 攻击者与被攻击者不在同一战局
+	ErrRaidLootIndexInvalid  = New(1310, "战利品索引无效")   // 战利品索引超出范围
+)
+
 // IsSuccess 判断错误码是否为成功
 func IsSuccess(code uint32) bool {
 	return code == 0

@@ -892,3 +892,180 @@ type S2CChatHistoryResp struct {
 	Channel  int32            `json:"channel"`  // 频道
 	Messages []S2CChatMessage `json:"messages"` // 历史消息（按时间升序）
 }
+
+// ==================== 战局模块 ====================
+
+// C2SRaidEnter 客户端请求进入战局
+type C2SRaidEnter struct {
+	MapID int32 `json:"map_id"` // 地图模板ID
+}
+
+// S2CRaidEnterResp 服务端返回战局地图数据
+type S2CRaidEnterResp struct {
+	Code             uint32              `json:"code"`              // 错误码，0=成功
+	MapID            uint64              `json:"map_id"`            // 战局实例ID
+	MapName          string              `json:"map_name"`          // 地图名称
+	Duration         int64               `json:"duration"`          // 总时长秒
+	Monsters         []MonsterData       `json:"monsters"`          // 场景内怪物列表
+	Zones            []RaidZoneData      `json:"zones"`             // 区域列表
+	ExtractionPoints []ExtractionPointData `json:"extraction_points"` // 撤离点列表
+	LootContainers   []LootContainerData `json:"loot_containers"`   // 战利品容器列表
+}
+
+// RaidZoneData 战局区域数据
+type RaidZoneData struct {
+	ID         int32   `json:"id"`          // 区域ID
+	Name       string  `json:"name"`        // 区域名称
+	X1         float64 `json:"x1"`          // 左上角X
+	Y1         float64 `json:"y1"`          // 左上角Y
+	X2         float64 `json:"x2"`          // 右下角X
+	Y2         float64 `json:"y2"`          // 右下角Y
+	PvPEnabled bool    `json:"pvp_enabled"` // 是否允许PvP
+	LootTier   int32   `json:"loot_tier"`   // 掉落品质等级
+}
+
+// ExtractionPointData 撤离点数据
+type ExtractionPointData struct {
+	ID              int32   `json:"id"`               // 撤离点ID
+	X               float64 `json:"x"`                // X坐标
+	Y               float64 `json:"y"`                // Y坐标
+	Radius          float64 `json:"radius"`           // 触发半径
+	ExtractDuration int32   `json:"extract_duration"` // 撤离所需秒数
+}
+
+// LootContainerData 战利品容器数据
+type LootContainerData struct {
+	ID     uint64  `json:"id"`     // 容器唯一ID
+	X      float64 `json:"x"`      // X坐标
+	Y      float64 `json:"y"`      // Y坐标
+	Opened bool    `json:"opened"` // 是否已打开
+}
+
+// C2SRaidLeave 客户端请求离开战局
+type C2SRaidLeave struct{}
+
+// S2CRaidLeaveResp 服务端离开战局确认
+type S2CRaidLeaveResp struct {
+	Code uint32 `json:"code"` // 错误码，0=成功
+}
+
+// S2CRaidInfo 服务端推送战局状态
+type S2CRaidInfo struct {
+	Remaining int64 `json:"remaining"` // 剩余秒数
+	ZoneID    int32 `json:"zone_id"`   // 当前所在区域ID
+	PvPFlag   bool  `json:"pvp_flag"`  // 是否在PvP区域
+}
+
+// C2SRaidExtract 客户端请求开始撤离
+type C2SRaidExtract struct {
+	PointID int32 `json:"point_id"` // 撤离点ID
+}
+
+// S2CRaidExtractResp 服务端撤离结果
+type S2CRaidExtractResp struct {
+	Code  uint32 `json:"code"`  // 错误码，0=成功
+	Timer int32  `json:"timer"` // 撤离倒计时秒数
+}
+
+// S2CRaidExtractProgress 服务端推送撤离倒计时
+type S2CRaidExtractProgress struct {
+	Timer int32 `json:"timer"` // 剩余撤离秒数
+}
+
+// C2SRaidLootOpen 客户端请求打开战利品容器
+type C2SRaidLootOpen struct {
+	ContainerID uint64 `json:"container_id"` // 容器ID
+}
+
+// S2CRaidLootOpenResp 服务端返回容器内容
+type S2CRaidLootOpenResp struct {
+	Code  uint32         `json:"code"`  // 错误码，0=成功
+	Items []RaidLootData `json:"items"` // 容器内物品列表
+}
+
+// RaidLootData 战局物品数据
+type RaidLootData struct {
+	Index   int32  `json:"index"`   // 物品在容器中的索引
+	ItemID  int32  `json:"item_id"` // 物品模板ID
+	Count   int32  `json:"count"`   // 物品数量
+	Quality int32  `json:"quality"` // 品质等级
+	Name    string `json:"name"`    // 物品名称
+}
+
+// C2SRaidLootPickup 客户端请求拾取战利品
+type C2SRaidLootPickup struct {
+	ItemIndex int32 `json:"item_index"` // 物品索引
+}
+
+// S2CRaidLootPickupResp 服务端拾取结果
+type S2CRaidLootPickupResp struct {
+	Code uint32 `json:"code"` // 错误码，0=成功
+}
+
+// C2SRaidLootDiscard 客户端请求丢弃战利品
+type C2SRaidLootDiscard struct {
+	ItemIndex int32 `json:"item_index"` // 物品索引
+}
+
+// S2CRaidLootDiscardResp 服务端丢弃结果
+type S2CRaidLootDiscardResp struct {
+	Code uint32 `json:"code"` // 错误码，0=成功
+}
+
+// S2CRaidInventory 服务端推送战局背包同步
+type S2CRaidInventory struct {
+	Items []RaidLootData `json:"items"` // 当前战局背包物品
+}
+
+// S2CRaidDeath 服务端通知战局内玩家死亡
+type S2CRaidDeath struct {
+	PlayerID uint64 `json:"player_id"` // 死亡玩家ID
+	Reason   string `json:"reason"`    // 死亡原因："killed" / "timeout" / "abandon"
+}
+
+// S2CRaidTimer 服务端推送战局剩余时间
+type S2CRaidTimer struct {
+	Remaining int64 `json:"remaining"` // 剩余秒数
+}
+
+// C2SRaidPvpAttack 客户端战局内PvP攻击请求
+type C2SRaidPvpAttack struct {
+	TargetID uint64 `json:"target_id"` // 目标玩家ID
+}
+
+// S2CRaidPvpResult 服务端战局PvP结果
+type S2CRaidPvpResult struct {
+	Code       uint32 `json:"code"`        // 错误码，0=成功
+	AttackerID uint64 `json:"attacker_id"` // 攻击者ID
+	TargetID   uint64 `json:"target_id"`   // 目标ID
+	Damage     int64  `json:"damage"`      // 伤害值
+	CurrHp     int64  `json:"curr_hp"`     // 目标当前血量
+	IsDead     bool   `json:"is_dead"`     // 目标是否死亡
+}
+
+// C2SRaidMapList 客户端请求查询可用战局地图列表
+type C2SRaidMapList struct{}
+
+// S2CRaidMapListResp 服务端返回地图列表
+type S2CRaidMapListResp struct {
+	Code uint32        `json:"code"` // 错误码，0=成功
+	Maps []RaidMapInfo `json:"maps"` // 可用地图列表
+}
+
+// RaidMapInfo 战局地图信息
+type RaidMapInfo struct {
+	TemplateID int32  `json:"template_id"` // 地图模板ID
+	Name       string `json:"name"`        // 地图名称
+	Duration   int64  `json:"duration"`    // 战局时长秒
+	ZoneCount  int32  `json:"zone_count"`  // 区域数量
+	LootTier   int32  `json:"loot_tier"`   // 掉落品质等级
+}
+
+// C2SRaidStash 客户端请求查询战局仓库
+type C2SRaidStash struct{}
+
+// S2CRaidStashResp 服务端返回仓库内容
+type S2CRaidStashResp struct {
+	Code  uint32         `json:"code"`  // 错误码，0=成功
+	Items []RaidLootData `json:"items"` // 仓库物品列表
+}

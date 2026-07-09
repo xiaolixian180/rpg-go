@@ -56,6 +56,8 @@ type Player struct {
 	MaxMp           int64               // 魔法值上限
 	Items           map[uint32]int32    // 背包物品（item_id -> 数量），登录时初始化默认物品
 	Dirty           bool                // 是否有未持久化的变更（定时存档标记）
+	RaidState       *RaidState          // 战局状态，nil表示不在战局中
+	RaidStash       []*RaidLootItem     // 战局仓库（成功撤离后保存的战利品）
 }
 
 // ExpTable 升级所需经验表，索引为当前等级，值为升到下一级所需经验

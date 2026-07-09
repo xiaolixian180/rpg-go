@@ -27,6 +27,7 @@ import (
 	"hero-quest/internal/service/pet"
 	"hero-quest/internal/service/player"
 	"hero-quest/internal/service/pvp"
+	"hero-quest/internal/service/raid"
 	"hero-quest/internal/service/rank"
 	"hero-quest/internal/service/shop"
 	"hero-quest/internal/service/skill"
@@ -159,6 +160,9 @@ func main() {
 	teamSvc := team.NewTeamService()
 	chatSvc := chat.NewChatService()
 
+	// 战局（搜打撤模式，无持久化，纯内存）
+	raidSvc := raid.NewRaidService()
+
 	// 事件总线 — 解耦 Boss 死亡等跨模块事件
 	bus := eventbus.New()
 	bus.Subscribe(eventbus.TopicBossDie, func(e eventbus.Event) {
@@ -204,7 +208,7 @@ func main() {
 		gm, // World 接口
 		playerSvc, dungeonSvc, combatSvc, bossSvc, equipSvc,
 		pvpSvc, petSvc, shopSvc, tradeSvc, skillSvc, rankSvc,
-		teamSvc, chatSvc,
+		teamSvc, chatSvc, raidSvc,
 		bus,
 		jwtMgr,
 	)
@@ -228,6 +232,8 @@ func main() {
 	scheduler.RegisterAutoSaveTask(sched, gm)
 	scheduler.RegisterAutoBattleTask(sched, gm, combatSvc, bus)
 	scheduler.RegisterMonsterAITask(sched, gm)
+	scheduler.RegisterRaidTimerTask(sched, raidSvc, gw.Hub(), gm)
+	scheduler.RegisterRaidMonsterAITask(sched, raidSvc, gm)
 
 	// 启动
 	go func() {

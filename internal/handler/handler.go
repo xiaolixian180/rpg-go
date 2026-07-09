@@ -17,6 +17,7 @@ import (
 	"hero-quest/internal/service/pet"
 	"hero-quest/internal/service/player"
 	"hero-quest/internal/service/pvp"
+	"hero-quest/internal/service/raid"
 	"hero-quest/internal/service/rank"
 	"hero-quest/internal/service/shop"
 	"hero-quest/internal/service/skill"
@@ -45,6 +46,7 @@ type Handler struct {
 	team    *TeamHandler
 	chat    *ChatHandler
 	useItem *UseItemHandler
+	raid    *RaidHandler
 }
 
 // New 创建消息处理器管理器实例
@@ -63,6 +65,7 @@ func New(
 	rankSvc rank.RankService,
 	teamSvc team.TeamService,
 	chatSvc chat.ChatService,
+	raidSvc raid.RaidService,
 	bus *eventbus.Bus,
 	jwtMgr *auth.JWTManager,
 ) *Handler {
@@ -83,6 +86,7 @@ func New(
 		team:    NewTeamHandler(world, teamSvc),
 		chat:    NewChatHandler(world, chatSvc, teamSvc),
 		useItem: NewUseItemHandler(world),
+		raid:    NewRaidHandler(world, raidSvc),
 	}
 }
 
@@ -149,6 +153,17 @@ func (h *Handler) Register(router *gateway.Router) {
 	router.Register(protocol.MsgIDChatHistory, h.chat.HandleChatHistory)
 
 	router.Register(protocol.MsgIDUseItem, h.useItem.HandleUseItem)
+
+	// 战局模块
+	router.Register(protocol.MsgIDRaidEnter, h.raid.HandleEnterRaid)
+	router.Register(protocol.MsgIDRaidLeave, h.raid.HandleLeaveRaid)
+	router.Register(protocol.MsgIDRaidLootOpen, h.raid.HandleOpenLoot)
+	router.Register(protocol.MsgIDRaidLootPickup, h.raid.HandlePickupLoot)
+	router.Register(protocol.MsgIDRaidLootDiscard, h.raid.HandleDiscardLoot)
+	router.Register(protocol.MsgIDRaidExtract, h.raid.HandleExtract)
+	router.Register(protocol.MsgIDRaidCancelExtract, h.raid.HandleCancelExtract)
+	router.Register(protocol.MsgIDRaidPvpAttack, h.raid.HandleRaidPvpAttack)
+	router.Register(protocol.MsgIDRaidMapList, h.raid.HandleRaidMapList)
 }
 
 // onlinePlayer 获取内存中的在线玩家
