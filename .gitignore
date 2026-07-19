@@ -27,6 +27,8 @@ Thumbs.db
 # 环境与敏感文件
 .env
 *.log
+configs/config.yaml
+configs/config.local.yaml
 
 # Go 编译缓存
 cmd.exe

@@ -1,34 +1,36 @@
+# 配置模板 - 复制为 config.yaml 并填入实际值
+# cp config.example.yaml config.yaml
 server:
   host: "0.0.0.0"
-  port: 8088
+  port: 8080
   read_timeout: 10
   write_timeout: 10
   max_conn_per_ip: 5
   heartbeat_sec: 30
   reconnect_sec: 180
-  max_request_per_sec: 30
+  max_request_per_sec: 200
 
 database:
   host: "127.0.0.1"
   port: 3306
   user: "root"
-  password: "hero_quest_2026"
+  password: "changeme"
   dbname: "hero_quest"
   max_idle: 10
   max_open: 100
 
+mongodb:
+  uri: "mongodb://mongo_root:changeme@127.0.0.1:27017"
+  database: "hero_quest"
+
 redis:
   host: "127.0.0.1"
   port: 6379
-  password: "hero_quest_redis_2026"
+  password: "changeme"
   db: 0
 
-mongodb:
-  uri: "mongodb://root:hero_quest_mongo_2026@127.0.0.1:27017"
-  database: "hero_quest"
-
 jwt:
-  secret: "hero-quest-secret-key"
+  secret: "change-this-to-a-long-random-string"
   expire_hours: 24
 
 game:

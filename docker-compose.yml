@@ -12,16 +12,16 @@ services:
         condition: service_healthy
     environment:
       - DB_HOST=mysql
-      - HQ_MONGODB_URI=mongodb://root:${HQ_MONGO_PASSWORD:-hero_quest_mongo_2026}@mongodb:27017
+      - HQ_MONGODB_URI=${HQ_MONGODB_URI}
       - REDIS_HOST=redis
-      - HQ_JWT_SECRET=hero-quest-secret-key
-      - HQ_DATABASE_PASSWORD=hero_quest_2026
-      - HQ_REDIS_PASSWORD=hero_quest_redis_2026
+      - HQ_JWT_SECRET=${HQ_JWT_SECRET}
+      - HQ_DATABASE_PASSWORD=${HQ_DATABASE_PASSWORD}
+      - HQ_REDIS_PASSWORD=${HQ_REDIS_PASSWORD}
     restart: unless-stopped
     labels:
-      logging: "promtail"          # promtail 自动发现标记
+      logging: "promtail"
     logging:
-      driver: json-file             # Docker 默认日志驱动，promtail 从文件采集
+      driver: json-file
       options:
         max-size: "50m"
         max-file: "3"
@@ -29,9 +29,9 @@ services:
   mysql:
     image: mysql:8.0
     ports:
-      - "3307:3306"
+      - "3306:3306"
     environment:
-      - MYSQL_ROOT_PASSWORD=${HQ_DATABASE_PASSWORD:-hero_quest_2026}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - MYSQL_DATABASE=hero_quest
     volumes:
       - mysql_data:/var/lib/mysql
@@ -45,11 +45,11 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
-    command: --requirepass ${HQ_REDIS_PASSWORD:-hero_quest_redis_2026}
+    command: --requirepass ${HQ_REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${HQ_REDIS_PASSWORD:-hero_quest_redis_2026}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${HQ_REDIS_PASSWORD}", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -59,8 +59,8 @@ services:
     ports:
       - "27017:27017"
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=root
-      - MONGO_INITDB_ROOT_PASSWORD=${HQ_MONGO_PASSWORD:-hero_quest_mongo_2026}
+      - MONGO_INITDB_ROOT_USERNAME=mongo_root
+      - MONGO_INITDB_ROOT_PASSWORD=${HQ_MONGO_PASSWORD}
     volumes:
       - mongo_data:/data/db
     healthcheck:
@@ -102,7 +102,7 @@ services:
         condition: service_healthy
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=${GF_ADMIN_PASSWORD:-hq_grafana_admin_2026}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_ADMIN_PASSWORD}
       - GF_AUTH_ANONYMOUS_ENABLED=false
     volumes:
       - ./configs/grafana/provisioning:/etc/grafana/provisioning:ro
