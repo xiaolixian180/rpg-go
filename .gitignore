@@ -4,6 +4,7 @@
 *.dll
 *.so
 *.dylib
+/hero-quest-server
 
 # 测试与覆盖率
 *.test
